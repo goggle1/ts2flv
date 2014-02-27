@@ -174,6 +174,97 @@ typedef struct pmt_packet
 
 } PMT_PACKET;
 
+typedef struct pes_header
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t packet_start_code_prefix_23_16	:8;
+	u_int32_t packet_start_code_prefix_15_8		:8;
+	u_int32_t packet_start_code_prefix_7_0		:8;
+	u_int32_t stream_id							:8;
+	u_int32_t pes_packet_length_15_8			:8;
+	u_int32_t pes_packet_length_7_0				:8;
+
+	u_int32_t pes_header_flags_OC				:1;
+	u_int32_t pes_header_flags_CR				:1;
+	u_int32_t pes_header_flags_DA				:1;
+	u_int32_t pes_header_flags_PR				:1; 
+	u_int32_t pes_header_flags_SC				:2;
+	u_int32_t reserved_bits_10					:2;
+
+	u_int32_t pes_header_flags_EXT				:1;
+	u_int32_t pes_header_flags_CRC				:1;
+	u_int32_t pes_header_flags_AC				:1;
+	u_int32_t pes_header_flags_TM				:1;
+	u_int32_t pes_header_flags_RATE				:1;
+	u_int32_t pes_header_flags_ESCR				:1;
+	u_int32_t pes_header_flags_PD				:2;	
+
+	u_int32_t pes_header_length					:8;
+	// PES Header Fields
+	// PES Packet Date Block
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t packet_start_code_prefix_23_16	:8;
+	u_int32_t packet_start_code_prefix_15_8		:8;
+	u_int32_t packet_start_code_prefix_7_0		:8;
+	u_int32_t stream_id							:8;
+	u_int32_t pes_packet_length_15_8			:8;
+	u_int32_t pes_packet_length_7_0				:8;
+	
+	u_int32_t reserved_bits_10					:2;
+	u_int32_t pes_header_flags_SC				:2;
+	u_int32_t pes_header_flags_PR				:1; 
+	u_int32_t pes_header_flags_DA				:1;
+	u_int32_t pes_header_flags_CR				:1;
+	u_int32_t pes_header_flags_OC				:1;
+	
+	u_int32_t pes_header_flags_PD				:2;
+	u_int32_t pes_header_flags_ESCR				:1;
+	u_int32_t pes_header_flags_RATE				:1;
+	u_int32_t pes_header_flags_TM				:1;
+	u_int32_t pes_header_flags_AC				:1;
+	u_int32_t pes_header_flags_CRC				:1;
+	u_int32_t pes_header_flags_EXT				:1;
+	
+	u_int32_t pes_header_length					:8;
+	// PES Header Fields
+	// PES Packet Date Block
+#endif
+
+} PES_HEADER;
+
+typedef struct timestamp_t
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t marker_0						:1;
+	u_int32_t timestamp_32_30				:3;
+	u_int32_t pts_or_dts_flag				:4;
+	
+	u_int32_t timestamp_29_22				:8;
+
+	u_int32_t marker_1						:1;
+	u_int32_t timestamp_21_15				:7;
+	
+	u_int32_t timestamp_14_7				:8;
+
+	u_int32_t marker_2						:1;
+	u_int32_t timestamp_6_0 				:7;
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t pts_or_dts_flag				:4;
+	u_int32_t timestamp_32_30				:3;
+	u_int32_t marker_0						:1;
+	
+	u_int32_t timestamp_29_22				:8;
+	
+	u_int32_t timestamp_21_15				:7;
+	u_int32_t marker_1						:1;
+	
+	u_int32_t timestamp_14_7				:8;
+	
+	u_int32_t timestamp_6_0					:7;
+	u_int32_t marker_2						:1;
+#endif
+
+} TIMESTAMP_T;
 
 #pragma pack()
 
