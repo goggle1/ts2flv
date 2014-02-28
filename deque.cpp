@@ -69,7 +69,7 @@ void 		deque_release(DEQUE_T* dequep, RELEASE_FUNCTION release_it)
 		{
 			break;
 		}
-		nodep = nodep->nextp;
+		nodep = tempp;
 	}
 	
 	if(dequep != NULL)

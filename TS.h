@@ -174,6 +174,58 @@ typedef struct pmt_packet
 
 } PMT_PACKET;
 
+typedef struct program_clock_reference
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t program_clock_reference_base_32_25	:8;
+	u_int32_t program_clock_reference_base_24_17	:8;
+	u_int32_t program_clock_reference_base_16_9 	:8;
+	u_int32_t program_clock_reference_base_8_1		:8;
+	u_int32_t program_clock_reference_extension_8_8	:1;
+	u_int32_t reserved								:6;
+	u_int32_t program_clock_reference_base_0		:1;
+	u_int32_t program_clock_reference_extension_7_0 :8;
+	
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t program_clock_reference_base_32_25	:8;
+	u_int32_t program_clock_reference_base_24_17	:8;
+	u_int32_t program_clock_reference_base_16_9		:8;
+	u_int32_t program_clock_reference_base_8_1		:8;
+	u_int32_t program_clock_reference_base_0 		:1;
+	u_int32_t reserved 								:6;
+	u_int32_t program_clock_reference_extension_8_8	:1;
+	u_int32_t program_clock_reference_extension_7_0	:8;
+#endif
+
+}PROGRAM_CLOCK_REFERENCE ;
+
+typedef struct adaptation_field
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t adaptation_field_length 				:8;
+	u_int32_t adaptation_field_extension_flag 		:1;
+	u_int32_t transport_private_data_flag 			:1;
+	u_int32_t splicing_point_flag 					:1;
+	u_int32_t OPCR_flag 							:1;
+	u_int32_t PCR_flag 								:1;
+	u_int32_t elementary_stream_priority_indicator 	:1;
+	u_int32_t random_access_indicator 				:1;	
+	u_int32_t discontinuity_indicator 				:1;	
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t adaptation_field_length 				:8;
+	u_int32_t discontinuity_indicator 				:1;
+	u_int32_t random_access_indicator 				:1;
+	u_int32_t elementary_stream_priority_indicator 	:1;
+	u_int32_t PCR_flag 								:1;
+	u_int32_t OPCR_flag 							:1;
+	u_int32_t splicing_point_flag 					:1;
+	u_int32_t transport_private_data_flag 			:1;
+	u_int32_t adaptation_field_extension_flag 		:1;
+#endif
+
+} ADAPTATION_FIELD;
+
+
 typedef struct pes_header
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -181,25 +233,25 @@ typedef struct pes_header
 	u_int32_t packet_start_code_prefix_15_8		:8;
 	u_int32_t packet_start_code_prefix_7_0		:8;
 	u_int32_t stream_id							:8;
-	u_int32_t pes_packet_length_15_8			:8;
-	u_int32_t pes_packet_length_7_0				:8;
+	u_int32_t PES_packet_length_15_8			:8;
+	u_int32_t PES_packet_length_7_0				:8;
 
-	u_int32_t pes_header_flags_OC				:1;
-	u_int32_t pes_header_flags_CR				:1;
-	u_int32_t pes_header_flags_DA				:1;
-	u_int32_t pes_header_flags_PR				:1; 
-	u_int32_t pes_header_flags_SC				:2;
+	u_int32_t original_or_copy					:1;
+	u_int32_t copyright							:1;
+	u_int32_t data_alignment_indicator			:1;
+	u_int32_t PES_priority						:1; 
+	u_int32_t PES_scrambling_control			:2;
 	u_int32_t reserved_bits_10					:2;
 
-	u_int32_t pes_header_flags_EXT				:1;
-	u_int32_t pes_header_flags_CRC				:1;
-	u_int32_t pes_header_flags_AC				:1;
-	u_int32_t pes_header_flags_TM				:1;
-	u_int32_t pes_header_flags_RATE				:1;
-	u_int32_t pes_header_flags_ESCR				:1;
-	u_int32_t pes_header_flags_PD				:2;	
+	u_int32_t PES_extension_flag				:1;
+	u_int32_t PES_CRC_flag						:1;
+	u_int32_t additional_copy_info_flag			:1;
+	u_int32_t DSM_trick_mode_flag				:1;
+	u_int32_t ES_rate_flag						:1;
+	u_int32_t ESCR_flag							:1;
+	u_int32_t PTS_DTS_flags						:2;	
 
-	u_int32_t pes_header_length					:8;
+	u_int32_t PES_header_data_length			:8;
 	// PES Header Fields
 	// PES Packet Date Block
 #elif __BYTE_ORDER == __BIG_ENDIAN
@@ -207,25 +259,25 @@ typedef struct pes_header
 	u_int32_t packet_start_code_prefix_15_8		:8;
 	u_int32_t packet_start_code_prefix_7_0		:8;
 	u_int32_t stream_id							:8;
-	u_int32_t pes_packet_length_15_8			:8;
-	u_int32_t pes_packet_length_7_0				:8;
+	u_int32_t PES_packet_length_15_8			:8;
+	u_int32_t PES_packet_length_7_0				:8;
 	
 	u_int32_t reserved_bits_10					:2;
-	u_int32_t pes_header_flags_SC				:2;
-	u_int32_t pes_header_flags_PR				:1; 
-	u_int32_t pes_header_flags_DA				:1;
-	u_int32_t pes_header_flags_CR				:1;
-	u_int32_t pes_header_flags_OC				:1;
+	u_int32_t PES_scrambling_control			:2;
+	u_int32_t PES_priority						:1; 
+	u_int32_t data_alignment_indicator			:1;
+	u_int32_t copyright							:1;
+	u_int32_t original_or_copy					:1;
 	
-	u_int32_t pes_header_flags_PD				:2;
-	u_int32_t pes_header_flags_ESCR				:1;
-	u_int32_t pes_header_flags_RATE				:1;
-	u_int32_t pes_header_flags_TM				:1;
-	u_int32_t pes_header_flags_AC				:1;
-	u_int32_t pes_header_flags_CRC				:1;
-	u_int32_t pes_header_flags_EXT				:1;
+	u_int32_t PTS_DTS_flags						:2;
+	u_int32_t ESCR_flag							:1;
+	u_int32_t ES_rate_flag						:1;
+	u_int32_t DSM_trick_mode_flag				:1;
+	u_int32_t additional_copy_info_flag			:1;
+	u_int32_t PES_CRC_flag						:1;
+	u_int32_t PES_extension_flag				:1;
 	
-	u_int32_t pes_header_length					:8;
+	u_int32_t PES_header_data_length			:8;
 	// PES Header Fields
 	// PES Packet Date Block
 #endif
@@ -267,6 +319,15 @@ typedef struct timestamp_t
 } TIMESTAMP_T;
 
 #pragma pack()
+
+
+typedef struct pes_t
+{
+	u_int64_t	pts;
+	u_int64_t	dts;
+	u_int8_t*	ptr;
+	u_int64_t	len;
+} PES_T;
 
 int ts2flv(char* ts_file, char* flv_file);
 

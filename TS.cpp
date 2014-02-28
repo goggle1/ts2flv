@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "TS.h"
 #include "deque.h"
@@ -19,37 +20,84 @@ DEQUE_T*	g_video_deque 	= NULL;
 BUFFER_T	g_now_audio_pes = {0};
 BUFFER_T	g_now_video_pes = {0};
 
-int timestamp_parse(u_int8_t* buffer, int len)
+int timestamp_parse(u_int8_t* buffer, int len, u_int64_t* outp)
 {
 	TIMESTAMP_T* timestampp = (TIMESTAMP_T*)buffer;
-	u_int64_t	value = timestampp->timestamp_32_30 << 30 | timestampp->timestamp_29_22 << 22 | timestampp->timestamp_21_15 << 15 | timestampp->timestamp_6_0;
+	u_int64_t	value = timestampp->timestamp_32_30 << 30 | 
+						timestampp->timestamp_29_22 << 22 | 
+						timestampp->timestamp_21_15 << 15 | 
+						timestampp->timestamp_14_7 << 7 |
+						timestampp->timestamp_6_0;
+	*outp = value;
 	fprintf(stdout, "%s: pts_or_dts_flag=0x%02X, timestamp=%lu \n", __FUNCTION__, timestampp->pts_or_dts_flag, value);
 	return 0;
 }
 
-int pes_parse(u_int8_t* pes_buffer, int pes_len)
+PES_T* pes_copy(PES_T* onep)
+{
+	PES_T* newp = (PES_T*)malloc(sizeof(PES_T));
+	if(newp == NULL)
+	{
+		return NULL;
+	}
+	newp->pts = onep->pts;
+	newp->dts = onep->dts;
+	newp->ptr = (u_int8_t*)malloc(onep->len);
+	if(newp->ptr == NULL)
+	{
+		free(newp);		
+		return NULL;
+	}
+	
+	memcpy(newp->ptr, onep->ptr, onep->len);
+	newp->len = onep->len;
+	return newp;
+}
+
+void pes_release(void* datap)
+{
+	PES_T* onep = (PES_T*)datap;
+	if(onep == NULL)
+	{
+		return;
+	}
+
+	if(onep->ptr != NULL)
+	{
+		free(onep->ptr);
+	}
+
+	free(onep);
+}
+
+
+int pes_parse(u_int8_t* pes_buffer, int pes_len, PES_T* pesp)
 {
 	PES_HEADER* headerp = (PES_HEADER*)pes_buffer;
-	//stream_id
 	fprintf(stdout, "%s: stream_id=%u[0x%02X] \n", __FUNCTION__, headerp->stream_id, headerp->stream_id);
-	fprintf(stdout, "%s: pes_header_flags_PD=0x%02X \n", __FUNCTION__, headerp->pes_header_flags_PD);
-	fprintf(stdout, "%s: pes_header_length=%u[0x%02X] \n", __FUNCTION__, headerp->pes_header_length, headerp->pes_header_length);
+	fprintf(stdout, "%s: PTS_DTS_flags=0x%02X \n", __FUNCTION__, headerp->PTS_DTS_flags);
+	fprintf(stdout, "%s: PES_header_data_length=%u[0x%02X] \n", __FUNCTION__, headerp->PES_header_data_length, headerp->PES_header_data_length);
 
-	if(headerp->pes_header_flags_PD & 0x02)
+	pesp->ptr = pes_buffer + sizeof(PES_HEADER) + headerp->PES_header_data_length;
+	pesp->len = pes_len - sizeof(PES_HEADER) - headerp->PES_header_data_length;
+	if(headerp->PTS_DTS_flags & 0x02)
 	{
 		// pts
-		timestamp_parse(pes_buffer+sizeof(PES_HEADER), sizeof(TIMESTAMP_T));
+		timestamp_parse(pes_buffer+sizeof(PES_HEADER), sizeof(TIMESTAMP_T), &(pesp->pts));
 	}
-	if(headerp->pes_header_flags_PD & 0x01)
+	if(headerp->PTS_DTS_flags & 0x01)
 	{
 		// dts
-		timestamp_parse(pes_buffer+sizeof(PES_HEADER)+sizeof(TIMESTAMP_T), sizeof(TIMESTAMP_T));
+		timestamp_parse(pes_buffer+sizeof(PES_HEADER)+sizeof(TIMESTAMP_T), sizeof(TIMESTAMP_T), &(pesp->dts));
 	}
 	return 0;
 }
 
+
 int ts_parse(u_int8_t* ts_buffer)
 {
+	static u_int32_t s_ts_index = 0;
+	
 	TS_HEADER* headerp = (TS_HEADER*)ts_buffer;
 	if(headerp->sync_byte != 0x47)
 	{
@@ -63,15 +111,16 @@ int ts_parse(u_int8_t* ts_buffer)
 	}	
 
 	u_int32_t pid = headerp->PID_12_8 << 8 | headerp->PID_7_0;
-	fprintf(stdout, "%s: pid=%u[0x%04X]\n", __FUNCTION__, pid, pid);
+	fprintf(stdout, "%s: index=%u, pid=%u[0x%04X]\n", __FUNCTION__, s_ts_index, pid, pid);
+	s_ts_index ++;
 	
-	if(headerp->adaption_field_control == 0x00 || headerp->adaption_field_control == 0x02)
+	if(headerp->adaption_field_control == 0x00)
 	{
-		fprintf(stdout, "%s: adaption_field_control=0x%02X, ![0x00,0x02]\n", __FUNCTION__, headerp->adaption_field_control);
-		//return -1;
+		fprintf(stdout, "%s: adaption_field_control=0x%02X, ==0x00\n", __FUNCTION__, headerp->adaption_field_control);
+		return -1;
 	}
 
-	int ts_pos = 4;	
+	int ts_pos = sizeof(TS_HEADER);	
 		
 	if(pid == 0x00)
 	{
@@ -88,7 +137,7 @@ int ts_parse(u_int8_t* ts_buffer)
 		}
 		PAT_PACKET* packetp = (PAT_PACKET*)(ts_buffer + ts_pos);
 		int section_length = packetp->section_length_11_8 << 8 | packetp->section_length_7_0;
-		int programs_length = section_length - 5 - 4;
+		int programs_length = section_length - 5 - 4; // 5: PAT_PACEKT left, 4: crc32 size
 		int programs_num = programs_length / sizeof(PROGRAM_T);
 
 		int index = 0;
@@ -154,13 +203,27 @@ int ts_parse(u_int8_t* ts_buffer)
 	//else if(g_pid_audio != 0x00 && pid == g_pid_audio)
 	else if(pid == g_pid_audio)
 	{
+		if(headerp->adaption_field_control == 0x01)
+		{
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += adaptation_field_length;
+			ts_pos += 1;
+		}
+		
 		u_int8_t* datap = ts_buffer + ts_pos;
 		int len = TS_PACKET_SIZE - ts_pos;		
 		if(headerp->payload_unit_start_indicator)
 		{			
 			if(g_now_audio_pes.len != 0)
 			{
-				pes_parse(g_now_audio_pes.ptr, g_now_audio_pes.len);
+				PES_T pes = {0};
+				pes_parse(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+				PES_T* newp = pes_copy(&pes);
+				deque_append(g_audio_deque, newp);
 			}
 			g_now_audio_pes.len = 0;
 			buffer_append(&g_now_audio_pes, datap, len);
@@ -174,13 +237,27 @@ int ts_parse(u_int8_t* ts_buffer)
 	}
 	else if(pid == g_pid_video)
 	{
+		if(headerp->adaption_field_control == 0x01)
+		{
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += adaptation_field_length;
+			ts_pos += 1;
+		}
+		
 		u_int8_t* datap = ts_buffer + ts_pos;
 		int len = TS_PACKET_SIZE - ts_pos;		
 		if(headerp->payload_unit_start_indicator)
 		{
 			if(g_now_video_pes.len != 0)
 			{
-				pes_parse(g_now_video_pes.ptr, g_now_video_pes.len);
+				PES_T pes = {0};
+				pes_parse(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+				PES_T* newp = pes_copy(&pes);
+				deque_append(g_video_deque, newp);
 			}
 			g_now_video_pes.len = 0;
 			buffer_append(&g_now_video_pes, datap, len);
@@ -195,6 +272,34 @@ int ts_parse(u_int8_t* ts_buffer)
 	else
 	{
 		fprintf(stdout, "%s: unknown pid=%d[0x%04X] \n", __FUNCTION__, pid, pid);
+		if(headerp->adaption_field_control == 0x01)
+		{
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x02)
+		{
+			ADAPTATION_FIELD* fieldp = (ADAPTATION_FIELD*)(ts_buffer + ts_pos);
+			if(fieldp->PCR_flag)
+			{
+				ts_pos += sizeof(ADAPTATION_FIELD);
+				PROGRAM_CLOCK_REFERENCE* pcrp = (PROGRAM_CLOCK_REFERENCE*)(ts_buffer + ts_pos);
+				u_int64_t pcr_base 	= pcrp->program_clock_reference_base_32_25 << 25 |
+										pcrp->program_clock_reference_base_24_17 << 17 |
+										pcrp->program_clock_reference_base_16_9 << 9 |
+										pcrp->program_clock_reference_base_8_1 << 1 | 
+										pcrp->program_clock_reference_base_0;
+				u_int32_t pcr_ext 	= pcrp->program_clock_reference_extension_8_8 << 8 |
+										pcrp->program_clock_reference_extension_7_0;
+				
+				fprintf(stdout, "%s: pcr_base=%lu, pcr_ext=%u \n", __FUNCTION__, pcr_base, pcr_ext);
+			}
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += adaptation_field_length;
+			ts_pos += 1;
+		}
 	}
 
 	return 0;
@@ -205,12 +310,12 @@ int ts_parse(u_int8_t* ts_buffer)
 {								\
 	if(g_video_deque != NULL)	\
 	{							\
-		deque_release(g_video_deque, buffer_release);	\
+		deque_release(g_video_deque, pes_release);	\
 		g_video_deque = NULL;	\
 	}							\
 	if(g_audio_deque != NULL)	\
 	{							\
-		deque_release(g_audio_deque, buffer_release);	\
+		deque_release(g_audio_deque, pes_release);	\
 		g_audio_deque = NULL;	\
 	}							\
 	if(flv_fd != -1)			\
@@ -277,6 +382,45 @@ int ts2flv(char* ts_file, char* flv_file)
     		break;
     	}	    	
     }
+
+    if(g_now_audio_pes.len != 0)
+	{
+		PES_T pes = {0};
+		pes_parse(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+		PES_T* newp = pes_copy(&pes);
+		deque_append(g_audio_deque, newp);
+	}
+	if(g_now_video_pes.len != 0)
+	{
+		PES_T pes = {0};
+		pes_parse(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+		PES_T* newp = pes_copy(&pes);
+		deque_append(g_video_deque, newp);
+	}
+
+	DEQUE_NODE* nodep = NULL;
+	nodep = g_audio_deque->headp;
+	while(nodep != NULL)
+	{
+		PES_T* pesp = (PES_T*)(nodep->elementp);
+		fprintf(stdout, "%s: audio dts=%lu, pts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts);
+		if(nodep->nextp == g_audio_deque->headp)
+		{
+			break;
+		}
+		nodep = nodep->nextp;		
+	}
+	nodep = g_video_deque->headp;
+	while(nodep != NULL)
+	{
+		PES_T* pesp = (PES_T*)(nodep->elementp);
+		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts, pesp->pts - pesp->dts);
+		if(nodep->nextp == g_video_deque->headp)
+		{
+			break;
+		}
+		nodep = nodep->nextp;		
+	}
 
     RELEASE();
     
