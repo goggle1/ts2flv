@@ -80,3 +80,43 @@ void 		deque_release(DEQUE_T* dequep, RELEASE_FUNCTION release_it)
 }
 
 
+void* 	deque_remove_head(DEQUE_T* dequep)
+{
+	if(dequep == NULL)
+	{
+		return NULL;
+	}
+
+	if(dequep->headp == NULL)
+	{
+		return NULL;
+	}
+	
+	if(dequep->count == 1)
+	{
+		DEQUE_NODE* tempp = dequep->headp;
+		dequep->count = 0;
+		dequep->headp = NULL;
+		
+		void* elementp = tempp->elementp;
+		free(tempp);
+		
+		return elementp;
+	}
+	
+	DEQUE_NODE* headp = dequep->headp;
+	DEQUE_NODE* tailp = headp->prevp;
+	DEQUE_NODE* tempp = headp->nextp;
+	tempp->prevp = headp->prevp;
+	tailp->nextp = tempp;
+	
+	dequep->count --;
+	dequep->headp = tempp;
+
+	void* elementp = headp->elementp;
+	free(headp);
+
+	return elementp;		
+}
+
+

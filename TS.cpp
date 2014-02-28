@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "TS.h"
+#include "flv.h"
 #include "deque.h"
 #include "buffer.h"
 
@@ -306,6 +307,76 @@ int ts_parse(u_int8_t* ts_buffer)
 }
 
 
+int pes_queue_merge(int fd)
+{	
+#if 0
+	DEQUE_NODE* nodep = NULL;
+	nodep = g_audio_deque->headp;
+	while(nodep != NULL)
+	{
+		PES_T* pesp = (PES_T*)(nodep->elementp);
+		fprintf(stdout, "%s: audio dts=%lu, pts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts);
+		if(nodep->nextp == g_audio_deque->headp)
+		{
+			break;
+		}
+		nodep = nodep->nextp;		
+	}
+	nodep = g_video_deque->headp;
+	while(nodep != NULL)
+	{
+		PES_T* pesp = (PES_T*)(nodep->elementp);
+		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts, pesp->pts - pesp->dts);
+		if(nodep->nextp == g_video_deque->headp)
+		{
+			break;
+		}
+		nodep = nodep->nextp;		
+	}
+#endif
+
+	PES_T* audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);	
+	PES_T* video_pesp = (PES_T*)deque_remove_head(g_video_deque);
+	while(1)
+	{	
+		if(audio_pesp == NULL)
+		{
+			break;
+		}
+		if(video_pesp == NULL)
+		{
+			break;
+		}
+		if(audio_pesp->pts <= video_pesp->dts)
+		{
+			fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_pesp->pts);	
+			audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);			
+		}
+		else
+		{
+			fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, video_pesp->pts - video_pesp->dts);	
+			flv_write_video(fd, video_pesp->dts, video_pesp->ptr, video_pesp->len);
+			video_pesp = (PES_T*)deque_remove_head(g_video_deque);
+		}
+	}
+
+	while(audio_pesp != NULL)
+	{
+		fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_pesp->pts);	
+		audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);
+	}
+
+	while(video_pesp != NULL)
+	{
+		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, video_pesp->pts - video_pesp->dts);	
+		flv_write_video(fd, video_pesp->dts, video_pesp->ptr, video_pesp->len);
+		video_pesp = (PES_T*)deque_remove_head(g_video_deque);
+	}
+
+	return 0;
+}
+
+
 #define RELEASE()	\
 {								\
 	if(g_video_deque != NULL)	\
@@ -397,31 +468,10 @@ int ts2flv(char* ts_file, char* flv_file)
 		PES_T* newp = pes_copy(&pes);
 		deque_append(g_video_deque, newp);
 	}
-
-	DEQUE_NODE* nodep = NULL;
-	nodep = g_audio_deque->headp;
-	while(nodep != NULL)
-	{
-		PES_T* pesp = (PES_T*)(nodep->elementp);
-		fprintf(stdout, "%s: audio dts=%lu, pts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts);
-		if(nodep->nextp == g_audio_deque->headp)
-		{
-			break;
-		}
-		nodep = nodep->nextp;		
-	}
-	nodep = g_video_deque->headp;
-	while(nodep != NULL)
-	{
-		PES_T* pesp = (PES_T*)(nodep->elementp);
-		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts, pesp->pts - pesp->dts);
-		if(nodep->nextp == g_video_deque->headp)
-		{
-			break;
-		}
-		nodep = nodep->nextp;		
-	}
-
+		
+	flv_write_header(flv_fd);
+	pes_queue_merge(flv_fd);
+	
     RELEASE();
     
 	return ret;
