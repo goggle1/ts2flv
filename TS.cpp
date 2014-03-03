@@ -21,6 +21,54 @@ DEQUE_T*	g_video_deque 	= NULL;
 BUFFER_T	g_now_audio_pes = {0};
 BUFFER_T	g_now_video_pes = {0};
 
+u_int64_t	g_start_timestamp = 0;
+
+int audio_get_aac(u_int8_t* datap, int len, AUDIO_SPECIFIC_CONFIG* configp, BUFFER_T* bufferp)
+{
+	int ret = 0;
+	
+	int pos = 0;
+	while(pos < len)
+	{
+		ADTS_HEADER* headerp = (ADTS_HEADER*)(datap+pos);
+		u_int32_t	sync_word 				= headerp->syncword_11_4 << 4 | 
+												headerp->syncword_3_0;
+
+		//configp->audioObjectType 			= headerp->profile;
+		configp->audioObjectType 			= 2;
+		configp->samplingFrequencyIndex_3_1 = headerp->sampling_frequency_index >> 1 & 0x0007;
+		configp->samplingFrequencyIndex_0 	= headerp->sampling_frequency_index >> 0 & 0x0001;
+		configp->channelConfiguration		= headerp->channel_configuration_2_2 << 2 | headerp->channel_configuration_1_0;
+		configp->frameLengthFlag 			= 0;
+		configp->dependsOnCoreCoder			= 0;
+		configp->extensionFlag				= 0;
+
+		u_int32_t	frame_length 			= headerp->frame_length_12_11 << 11 |
+												headerp->frame_length_10_3 << 3 |
+												headerp->frame_length_2_0;
+		u_int32_t   adts_buffer_fullness 	= headerp->adts_buffer_fullness_10_6 << 6 |
+												headerp->adts_buffer_fullness_5_0;
+		u_int32_t	blocks_in_frame			= headerp->number_of_raw_data_blocks_in_frame;
+		u_int32_t	adts_header_len			= 7;
+		if(headerp->protection_absent == 0)
+		{
+			adts_header_len = 9;
+		}
+		u_int32_t	raw_data_len 			= frame_length - adts_header_len;
+
+
+		fprintf(stdout, "%s: sync_word=0x%04X, profile=0x%02X, frequency=0x%02X, channels=0x%02X, fullness=0x%02X, "
+			"blocks_in_frame=%u, frame_length=%u[0x%04X], header_len=%u\n",
+			__FUNCTION__, sync_word, headerp->profile, headerp->sampling_frequency_index, configp->channelConfiguration, adts_buffer_fullness,
+			blocks_in_frame, frame_length, frame_length, adts_header_len);
+		ret = buffer_append(bufferp, datap+pos+adts_header_len, raw_data_len);
+		pos += frame_length;		
+	}
+
+	return 0;	
+}
+
+
 int timestamp_parse(u_int8_t* buffer, int len, u_int64_t* outp)
 {
 	TIMESTAMP_T* timestampp = (TIMESTAMP_T*)buffer;
@@ -337,6 +385,15 @@ int pes_queue_merge(int fd)
 
 	PES_T* audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);	
 	PES_T* video_pesp = (PES_T*)deque_remove_head(g_video_deque);
+	if(audio_pesp->pts <= video_pesp->dts)
+	{
+		g_start_timestamp = audio_pesp->pts;
+	}
+	else
+	{
+		g_start_timestamp = video_pesp->dts;
+	}
+		
 	while(1)
 	{	
 		if(audio_pesp == NULL)
@@ -349,13 +406,19 @@ int pes_queue_merge(int fd)
 		}
 		if(audio_pesp->pts <= video_pesp->dts)
 		{
-			fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_pesp->pts);	
+			fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_pesp->pts);				
+			AUDIO_SPECIFIC_CONFIG aac_config = {0};
+			BUFFER_T buffer = {0};
+			audio_get_aac(audio_pesp->ptr, audio_pesp->len, &aac_config, &buffer);
+			flv_write_audio(fd, (audio_pesp->pts-g_start_timestamp)/90, &aac_config, buffer.ptr, buffer.len);
+			free(buffer.ptr);
 			audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);			
 		}
 		else
 		{
-			fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, video_pesp->pts - video_pesp->dts);	
-			flv_write_video(fd, video_pesp->dts, video_pesp->ptr, video_pesp->len);
+			u_int64_t ts_diff = video_pesp->pts - video_pesp->dts;
+			fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, ts_diff);	
+			flv_write_video(fd, (video_pesp->dts-g_start_timestamp)/90, ts_diff/90, video_pesp->ptr, video_pesp->len);
 			video_pesp = (PES_T*)deque_remove_head(g_video_deque);
 		}
 	}
@@ -363,13 +426,19 @@ int pes_queue_merge(int fd)
 	while(audio_pesp != NULL)
 	{
 		fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_pesp->pts);	
+		AUDIO_SPECIFIC_CONFIG aac_config = {0};
+		BUFFER_T buffer = {0};
+		audio_get_aac(audio_pesp->ptr, audio_pesp->len, &aac_config, &buffer);
+		flv_write_audio(fd, (audio_pesp->pts-g_start_timestamp)/90, &aac_config, buffer.ptr, buffer.len);
+		free(buffer.ptr);
 		audio_pesp = (PES_T*)deque_remove_head(g_audio_deque);
 	}
 
 	while(video_pesp != NULL)
 	{
-		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, video_pesp->pts - video_pesp->dts);	
-		flv_write_video(fd, video_pesp->dts, video_pesp->ptr, video_pesp->len);
+		u_int64_t ts_diff = video_pesp->pts - video_pesp->dts;
+		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_pesp->dts, video_pesp->pts, ts_diff);	
+		flv_write_video(fd, (video_pesp->dts-g_start_timestamp)/90, ts_diff/90, video_pesp->ptr, video_pesp->len);
 		video_pesp = (PES_T*)deque_remove_head(g_video_deque);
 	}
 

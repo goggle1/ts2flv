@@ -4,13 +4,16 @@
 
 #include <sys/types.h>
 
-#define TAG_TYPE_AUDIO 	8
-#define TAG_TYPE_VIDEO 	9
-#define TAG_TYPE_SCRIPT 18
+#define TAG_TYPE_AUDIO 		8
+#define TAG_TYPE_VIDEO 		9
+#define TAG_TYPE_SCRIPT 	18
 
-#define AVC_SEQ_HEADER   0 // if codecid == 7 ,0=avc sequence header
-#define AVC_NALU         1 // if codecid == 7
-#define AVC_END_SEQ      2 // if codecid == 7 end of sequence (lower level NALU sequence ender si not required or  supoported)
+#define AAC_SEQENCE_HEADER  0
+#define AAC_RAW_DATA        1
+
+#define AVC_SEQ_HEADER   	0 // if codecid == 7 ,0=avc sequence header
+#define AVC_NALU         	1 // if codecid == 7
+#define AVC_END_SEQ      	2 // if codecid == 7 end of sequence (lower level NALU sequence ender si not required or  supoported)
 
 #pragma pack(1)
 
@@ -92,6 +95,57 @@ typedef struct flv_tag
 #endif
 } FLV_TAG;
 
+typedef struct audio_tag
+{
+#  if __BYTE_ORDER == __LITTLE_ENDIAN
+    u_int32_t sound_type:1; // 0=Mono sound; 1= stereo sound
+    u_int32_t sound_size:1; // 0=8-bit samples; 1=16-bit samples
+    u_int32_t sound_rate:2; // 3=44kHz
+    u_int32_t sound_format:4; // 10 aac;
+# elif __BYTE_ORDER == __BIG_ENDIAN   
+    u_int32_t sound_format:4; // 10 aac;
+    u_int32_t sound_rate:2; // 3=44kHz
+    u_int32_t sound_size:1; // 0=8-bit samples; 1=16-bit samples
+    u_int32_t sound_type:1; // 0=Mono sound; 1= stereo sound
+# endif    
+    //if sound_format== 10,the following values are defined: the first char is 
+    // 0=AAC sequence header ; 1=AAC raw
+    u_int8_t data[0]; // 
+}AUDIO_TAG;
+
+/*
+  AudioSpecificConfig.audioObjectType = 2 (AAC LC) (5 bits)
+    AudioSpecificConfig.samplingFrequencyIndex = 3 (4 bits)
+    AudioSpecificConfig.channelConfiguration = 6 (4 bits)
+    GASpecificConfig.frameLengthFlag = 0 (1 bit)
+    GASpecificConfig.dependsOnCoreCoder = 0 (1 bit)
+GASpecificConfig.extensionFlag = 0 (1 bit)
+*/
+typedef struct audio_specific_config
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN       
+    u_int16_t   samplingFrequencyIndex_3_1:3;
+    u_int16_t   audioObjectType:5; // 
+    
+    u_int16_t   extensionFlag:1;
+    u_int16_t   dependsOnCoreCoder:1;
+    u_int16_t   frameLengthFlag:1;
+    u_int16_t   channelConfiguration:4;
+    u_int16_t   samplingFrequencyIndex_0:1;
+    
+#elif __BYTE_ORDER == __BIG_ENDIAN  
+    u_int16_t   audioObjectType:5; // 
+    u_int16_t   samplingFrequencyIndex_3_1:3;
+    
+    u_int16_t   samplingFrequencyIndex_0:1;
+    u_int16_t   channelConfiguration:4;
+    u_int16_t   frameLengthFlag:1;
+    u_int16_t   dependsOnCoreCoder:1;
+    u_int16_t   extensionFlag:1;
+#endif        
+}AUDIO_SPECIFIC_CONFIG;
+
+
 typedef struct video_tag
 {
 #  if __BYTE_ORDER == __LITTLE_ENDIAN       
@@ -102,6 +156,7 @@ typedef struct video_tag
     u_int8_t codec_id				:4; // 7=avc
 # endif    
 }VIDEO_TAG;
+
 
 typedef struct avc_codec_header
 {
@@ -115,7 +170,8 @@ typedef struct avc_codec_header
 #pragma pack()
 
 int		flv_write_header(int fd);
-int 	flv_write_video(int fd, u_int32_t timestamp, u_int8_t* datap, int data_len);
+int 	flv_write_audio(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp, u_int8_t* datap, int data_len);
+int 	flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len);
 
 
 #endif

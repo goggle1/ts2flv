@@ -318,6 +318,91 @@ typedef struct timestamp_t
 
 } TIMESTAMP_T;
 
+/*
+adts_fixed_header()
+{
+	syncword; 12 bslbf
+	ID; 1 bslbf
+	layer; 2 uimsbf
+	protection_absent; 1 bslbf
+	profile; 2 uimsbf
+	sampling_frequency_index; 4 uimsbf
+	private_bit; 1 bslbf
+	channel_configuration; 3 uimsbf
+	original/copy; 1 bslbf
+	home; 1 bslbf
+}
+
+adts_variable_header()
+{
+	copyright_identification_bit; 1 bslbf
+	copyright_identification_start; 1 bslbf
+	frame_length; 13 bslbf
+	adts_buffer_fullness; 11 bslbf
+	number_of_raw_data_blocks_in_frame; 2 uimsfb
+}
+*/
+
+typedef struct adts_header
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t syncword_11_4					: 8;
+
+	u_int32_t protection_absent				: 1;
+	u_int32_t layer							: 2;
+	u_int32_t ID							: 1;
+	u_int32_t syncword_3_0					: 4;	
+
+	u_int32_t channel_configuration_2_2		: 1;
+	u_int32_t private_bit					: 1;
+	u_int32_t sampling_frequency_index		: 4;
+	u_int32_t profile						: 2;
+
+	u_int32_t frame_length_12_11			: 2;
+	u_int32_t copyright_identification_start: 1;
+	u_int32_t copyright_identification_bit	: 1;
+	u_int32_t home							: 1;
+	u_int32_t original_or_copy				: 1;
+	u_int32_t channel_configuration_1_0		: 2;	
+	
+	u_int32_t frame_length_10_3				: 8;
+
+	u_int32_t adts_buffer_fullness_10_6		: 5;
+	u_int32_t frame_length_2_0				: 3;
+	
+	u_int32_t number_of_raw_data_blocks_in_frame: 2;
+	u_int32_t adts_buffer_fullness_5_0		: 6;	
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t syncword_11_4					: 8;
+	
+	u_int32_t syncword_3_0					: 4;
+	u_int32_t ID							: 1;
+	u_int32_t layer							: 2;
+	u_int32_t protection_absent				: 1;
+	
+	u_int32_t profile						: 2;
+	u_int32_t sampling_frequency_index		: 4;
+	u_int32_t private_bit					: 1;
+	u_int32_t channel_configuration_2_2		: 1;
+	
+	u_int32_t channel_configuration_1_0		: 2;	
+	u_int32_t original_or_copy				: 1;
+	u_int32_t home							: 1;	
+	u_int32_t copyright_identification_bit	: 1;
+	u_int32_t copyright_identification_start: 1;
+	u_int32_t frame_length_12_11			: 2;
+	
+	u_int32_t frame_length_10_3				: 8;
+	
+	u_int32_t frame_length_2_0				: 3;
+	u_int32_t adts_buffer_fullness_10_6		: 5;
+	
+	u_int32_t adts_buffer_fullness_5_0		: 6;
+	u_int32_t number_of_raw_data_blocks_in_frame: 2;
+#endif
+} ADTS_HEADER;
+
+
 #pragma pack()
 
 
