@@ -17,7 +17,7 @@ typedef struct deque_t
 
 typedef void (*RELEASE_FUNCTION) (void* elementp);
 
-DEQUE_T* 	deque_init();
+int	 		deque_init(DEQUE_T* dequep);
 int 		deque_append(DEQUE_T* dequep, void* elementp);
 void 		deque_release(DEQUE_T* dequep, RELEASE_FUNCTION release_it);
 void*	 	deque_remove_head(DEQUE_T* dequep);

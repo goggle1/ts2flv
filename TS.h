@@ -9,6 +9,20 @@
 #define STREAM_AUDIO_MP3	0x03
 #define STREAM_VIDEO_H264	0x1b
 
+#define NALU_TYPE_SLICE 1
+#define NALU_TYPE_DPA 2
+#define NALU_TYPE_DPB 3
+#define NALU_TYPE_DPC 4
+#define NALU_TYPE_IDR 5
+#define NALU_TYPE_SEI 6
+#define NALU_TYPE_SPS 7
+#define NALU_TYPE_PPS 8
+#define NALU_TYPE_AUD 9  //?????
+#define NALU_TYPE_EOSEQ 10
+#define NALU_TYPE_EOSTREAM 11
+#define NALU_TYPE_FILL 12
+
+
 #pragma pack(1)
 
 typedef struct ts_header
@@ -413,6 +427,21 @@ typedef struct pes_t
 	u_int8_t*	ptr;
 	u_int64_t	len;
 } PES_T;
+
+typedef struct audio_es_t
+{
+	u_int64_t	pts;	
+	u_int8_t*	ptr;
+	u_int64_t	len;
+} AUDIO_ES_T;
+
+typedef PES_T VIDEO_ES_T;
+
+typedef struct nalu_t
+{
+	u_int8_t*	ptr;
+	u_int64_t	len;
+} NALU_T;
 
 int ts2flv(char* ts_file, char* flv_file);
 

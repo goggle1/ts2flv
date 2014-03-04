@@ -5,15 +5,12 @@
 
 #include "deque.h"
 
-DEQUE_T* 	deque_init()
+int	 	deque_init(DEQUE_T* dequep)
 {
-	DEQUE_T* dequep = (DEQUE_T*)malloc(sizeof(DEQUE_T));
-	if(dequep != NULL)
-	{
-		memset(dequep, 0, sizeof(DEQUE_T));
-	}
+	dequep->headp = NULL;
+	dequep->count = 0;
 
-	return dequep;
+	return 0;
 }
 
 int 		deque_append(DEQUE_T* dequep, void* elementp)
@@ -72,11 +69,8 @@ void 		deque_release(DEQUE_T* dequep, RELEASE_FUNCTION release_it)
 		nodep = tempp;
 	}
 	
-	if(dequep != NULL)
-	{
-		free(dequep);
-		dequep = NULL;
-	}
+	dequep->headp = NULL;
+	dequep->count = 0;
 }
 
 

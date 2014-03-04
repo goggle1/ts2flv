@@ -205,18 +205,93 @@ int flv_write_aac_data(int fd, u_int32_t timestamp, u_int8_t* datap, int data_le
 }
 
 
-int flv_write_audio(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp, u_int8_t* datap, int data_len)
+int flv_write_audio(int fd, u_int32_t timestamp, u_int8_t* datap, int data_len)
 {
-	int ret = 0;
-	static int s_write_config = 0;
-	if(s_write_config == 0)
-	{
-		ret = flv_write_aac_header(fd, timestamp, configp);
-		s_write_config = 1;
-	}
-	//ret = flv_write_aac_header(fd, 0, configp);
+	int ret = 0;	
 	ret = flv_write_aac_data(fd, timestamp, datap, data_len);
 	return ret;
+}
+
+
+int flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRecord* configp, int data_len)
+{
+	int ret = 0;
+	
+	FLV_TAG tag 	= {0};	
+	tag.reserved2 	= 0;
+    tag.filter		= 0;
+    tag.tag_type	= TAG_TYPE_VIDEO;
+
+	u_int32_t data_size = sizeof(VIDEO_TAG) + sizeof(AVC_CODEC_HEADER) + data_len;
+    tag.data_size_23_16		= data_size >> 16 & 0x000000FF;
+    tag.data_size_15_8		= data_size >>  8 & 0x000000FF;
+    tag.data_size_7_0		= data_size >>  0 & 0x000000FF;
+
+	//u_int32_t timestamp = 0;
+	tag.timestamp_extended	= timestamp >> 24 & 0x000000FF;
+	tag.timestamp_23_16		= timestamp >> 16 & 0x000000FF;
+    tag.timestamp_15_8		= timestamp >>  8 & 0x000000FF;
+    tag.timestamp_7_0		= timestamp >>  0 & 0x000000FF;
+
+	u_int32_t stream_id = 0;
+    tag.stream_id_23_16		= stream_id >> 16 & 0x000000FF;
+    tag.stream_id_15_8		= stream_id >>  8 & 0x000000FF;
+    tag.stream_id_7_0		= stream_id >>  0 & 0x000000FF;
+
+	int len = 0;
+	
+	len = sizeof(FLV_TAG);
+	ret = write(fd, &tag, len);
+	if(ret != len)
+	{
+		return -1;
+	}
+
+	VIDEO_TAG video_tag = {0};
+	video_tag.codec_id 		= 7;
+	video_tag.frame_format 	= 1;
+
+	len = sizeof(VIDEO_TAG);
+	ret = write(fd, &video_tag, len);
+	if(ret != len)
+	{
+		return -1;
+	}
+
+	u_int32_t composition_timestamp = 0;
+	AVC_CODEC_HEADER header = {0};
+	header.avc_packet_type 			= AVC_SEQ_HEADER;
+	header.composition_time23_16 	= composition_timestamp >> 16 & 0x000000FF;
+	header.composition_time15_8 	= composition_timestamp >>  8 & 0x000000FF;
+	header.composition_time7_0 		= composition_timestamp >>  0 & 0x000000FF;
+
+	len = sizeof(AVC_CODEC_HEADER);
+	ret = write(fd, &header, len);
+	if(ret != len)
+	{
+		return -1;
+	}
+
+	len = data_len;
+	ret = write(fd, configp, len);
+	if(ret != len)
+	{
+		return -1;
+	}
+
+	u_int32_t previous_tag_size = data_size;
+	u_int8_t  temp[4] = {0};
+	temp[0] 	= previous_tag_size>>24 & 0x000000FF;
+	temp[1]		= previous_tag_size>>16 & 0x000000FF;
+	temp[2]		= previous_tag_size>> 8 & 0x000000FF;
+	temp[3]		= previous_tag_size>> 0 & 0x000000FF;
+	ret = write(fd, &temp, 4);
+	if(ret != 4)
+	{
+		return -1;
+	}
+	
+	return 0;
 }
 
 

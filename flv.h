@@ -98,15 +98,15 @@ typedef struct flv_tag
 typedef struct audio_tag
 {
 #  if __BYTE_ORDER == __LITTLE_ENDIAN
-    u_int32_t sound_type:1; // 0=Mono sound; 1= stereo sound
-    u_int32_t sound_size:1; // 0=8-bit samples; 1=16-bit samples
-    u_int32_t sound_rate:2; // 3=44kHz
-    u_int32_t sound_format:4; // 10 aac;
+    u_int32_t sound_type			:1; // 0=Mono sound; 1= stereo sound
+    u_int32_t sound_size			:1; // 0=8-bit samples; 1=16-bit samples
+    u_int32_t sound_rate			:2; // 3=44kHz
+    u_int32_t sound_format			:4; // 10 aac;
 # elif __BYTE_ORDER == __BIG_ENDIAN   
-    u_int32_t sound_format:4; // 10 aac;
-    u_int32_t sound_rate:2; // 3=44kHz
-    u_int32_t sound_size:1; // 0=8-bit samples; 1=16-bit samples
-    u_int32_t sound_type:1; // 0=Mono sound; 1= stereo sound
+    u_int32_t sound_format			:4; // 10 aac;
+    u_int32_t sound_rate			:2; // 3=44kHz
+    u_int32_t sound_size			:1; // 0=8-bit samples; 1=16-bit samples
+    u_int32_t sound_type			:1; // 0=Mono sound; 1= stereo sound
 # endif    
     //if sound_format== 10,the following values are defined: the first char is 
     // 0=AAC sequence header ; 1=AAC raw
@@ -124,53 +124,111 @@ GASpecificConfig.extensionFlag = 0 (1 bit)
 typedef struct audio_specific_config
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN       
-    u_int16_t   samplingFrequencyIndex_3_1:3;
-    u_int16_t   audioObjectType:5; // 
+    u_int16_t   samplingFrequencyIndex_3_1	:3;
+    u_int16_t   audioObjectType				:5; // 
     
-    u_int16_t   extensionFlag:1;
-    u_int16_t   dependsOnCoreCoder:1;
-    u_int16_t   frameLengthFlag:1;
-    u_int16_t   channelConfiguration:4;
-    u_int16_t   samplingFrequencyIndex_0:1;
+    u_int16_t   extensionFlag				:1;
+    u_int16_t   dependsOnCoreCoder			:1;
+    u_int16_t   frameLengthFlag				:1;
+    u_int16_t   channelConfiguration		:4;
+    u_int16_t   samplingFrequencyIndex_0	:1;
     
 #elif __BYTE_ORDER == __BIG_ENDIAN  
-    u_int16_t   audioObjectType:5; // 
-    u_int16_t   samplingFrequencyIndex_3_1:3;
+    u_int16_t   audioObjectType				:5; // 
+    u_int16_t   samplingFrequencyIndex_3_1	:3;
     
-    u_int16_t   samplingFrequencyIndex_0:1;
-    u_int16_t   channelConfiguration:4;
-    u_int16_t   frameLengthFlag:1;
-    u_int16_t   dependsOnCoreCoder:1;
-    u_int16_t   extensionFlag:1;
+    u_int16_t   samplingFrequencyIndex_0	:1;
+    u_int16_t   channelConfiguration		:4;
+    u_int16_t   frameLengthFlag				:1;
+    u_int16_t   dependsOnCoreCoder			:1;
+    u_int16_t   extensionFlag				:1;
 #endif        
 }AUDIO_SPECIFIC_CONFIG;
 
 
 typedef struct video_tag
 {
-#  if __BYTE_ORDER == __LITTLE_ENDIAN       
+#if __BYTE_ORDER == __LITTLE_ENDIAN       
     u_int8_t codec_id				:4; // 7=avc
     u_int8_t frame_format			:4; // 1=key frame; 2=inter frame; 3=disposable interframe
-# elif __BYTE_ORDER == __BIG_ENDIAN    
+#elif __BYTE_ORDER == __BIG_ENDIAN    
     u_int8_t frame_format			:4; // 1=key frame; 2=inter frame; 3=disposable interframe
     u_int8_t codec_id				:4; // 7=avc
-# endif    
+#endif    
 }VIDEO_TAG;
 
 
 typedef struct avc_codec_header
 {
-    u_int32_t avc_packet_type:8;
-    u_int32_t composition_time23_16:8;
-    u_int32_t composition_time15_8:8;
-    u_int32_t composition_time7_0:8;
+    u_int32_t avc_packet_type		:8;
+    u_int32_t composition_time23_16	:8;
+    u_int32_t composition_time15_8	:8;
+    u_int32_t composition_time7_0	:8;
 }AVC_CODEC_HEADER;
+
+/* 根据这篇文章 http://blog.csdn.net/k1988/article/details/5654631
+aligned(8) class AVCDecoderConfigurationRecord 
+{
+    unsigned int(8) configurationVersion = 1;
+    unsigned int(8) AVCProfileIndication;
+    unsigned int(8) profile_compatibility;
+    unsigned int(8) AVCLevelIndication;
+    bit(6) reserved = ‘111111’b;      -------->(1)
+    unsigned int(2) lengthSizeMinusOne;
+    bit(3) reserved = ‘111’b;         -------->(2)
+    unsigned int(5) numOfSequenceParameterSets;
+    for (i=0; i< numOfSequenceParameterSets; i++)
+    {
+        unsigned int(16) sequenceParameterSetLength ;
+        bit(8*sequenceParameterSetLength) sequenceParameterSetNALUnit;
+    } 
+    unsigned int(8) numOfPictureParameterSets;
+    for (i=0; i< numOfPictureParameterSets; i++) 
+    {
+        unsigned int(16) pictureParameterSetLength;
+        bit(8*pictureParameterSetLength) pictureParameterSetNALUnit;
+    } 
+}
+*/
+
+typedef struct parameter_set
+{
+	u_int32_t sequenceParameterSetLength_15_8	:8;
+	u_int32_t sequenceParameterSetLength_7_0	:8;
+	u_int8_t  sequenceParameterSetNALUnit[0];
+} PARAMETER_SET;
+
+typedef struct AVCDecoderConfigurationRecord
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	u_int32_t configurationVersion			:8;
+	u_int32_t AVCProfileIndication			:8;
+	u_int32_t profile_compatibility			:8;
+	u_int32_t AVCLevelIndication			:8;
+	u_int32_t lengthSizeMinusOne			:2;
+	u_int32_t reserved_1					:6;	
+	u_int32_t numOfSequenceParameterSets	:5;
+	u_int32_t reserved_2					:3;		
+#elif __BYTE_ORDER == __BIG_ENDIAN
+	u_int32_t configurationVersion			:8;
+	u_int32_t AVCProfileIndication			:8;
+	u_int32_t profile_compatibility			:8;
+	u_int32_t AVCLevelIndication			:8;
+	u_int32_t reserved_1					:6;
+	u_int32_t lengthSizeMinusOne			:2;
+	u_int32_t reserved_2					:3;
+	u_int32_t numOfSequenceParameterSets	:5;	
+#endif
+} AVCDecoderConfigurationRecord;
+
 
 
 #pragma pack()
 
 int		flv_write_header(int fd);
-int 	flv_write_audio(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp, u_int8_t* datap, int data_len);
+int 	flv_write_aac_header(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp);
+int 	flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRecord* configp, int len);
+int 	flv_write_audio(int fd, u_int32_t timestamp, u_int8_t* datap, int data_len);
 int 	flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len);
 
 
