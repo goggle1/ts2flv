@@ -300,6 +300,117 @@ int ts_parse_pat(u_int8_t* buffer, int len)
 }
 
 
+int ts_find_pat_pmt(u_int8_t* ts_buffer)
+{
+	static u_int32_t s_ts_index = 0;
+	
+	TS_HEADER* headerp = (TS_HEADER*)ts_buffer;
+	if(headerp->sync_byte != 0x47)
+	{
+		fprintf(stderr, "%s: sync_byte=0x%02X, !=0x47\n", __FUNCTION__, headerp->sync_byte);
+		return -1;
+	}
+	if(headerp->transport_error_indicator != 0x00)
+	{
+		fprintf(stderr, "%s: transport_error_indicator=0x%02X, !=0x00\n", __FUNCTION__, headerp->transport_error_indicator);
+		return -1;
+	}	
+
+	u_int32_t pid = headerp->PID_12_8 << 8 | headerp->PID_7_0;
+	fprintf(stdout, "%s: index=%u, pid=%u[0x%04X]\n", __FUNCTION__, s_ts_index, pid, pid);
+	s_ts_index ++;
+	
+	if(headerp->adaption_field_control == 0x00)
+	{
+		fprintf(stdout, "%s: adaption_field_control=0x%02X, ==0x00\n", __FUNCTION__, headerp->adaption_field_control);
+		return -1;
+	}
+
+	int ts_pos = sizeof(TS_HEADER);	
+		
+	if(pid == 0x00)
+	{
+		// PAT
+		if(headerp->adaption_field_control == 0x01)
+		{	
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += adaptation_field_length;		
+		}
+		
+		if(headerp->payload_unit_start_indicator == 0x01)
+		{
+			int pointer_field = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += pointer_field;
+		}
+
+		u_int8_t* datap = ts_buffer + ts_pos;
+		int len = TS_PACKET_SIZE - ts_pos;
+		if(headerp->payload_unit_start_indicator)
+		{	
+			buffer_append(&g_now_pat, datap, len);
+			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat.len);
+		}
+		else
+		{	
+			buffer_append(&g_now_pat, datap, len);
+			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat.len);
+		}
+
+		ts_parse_pat(g_now_pat.ptr, g_now_pat.len);
+		g_now_pat.len = 0;	
+		
+	}
+	//else if(g_pid_pmt != 0x00 && pid == g_pid_pmt)
+	else if(pid == g_pid_pmt)
+	{
+		// PMT
+		if(headerp->adaption_field_control == 0x01)
+		{
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
+		}
+
+		if(headerp->payload_unit_start_indicator == 0x01)
+		{
+			int pointer_field = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += pointer_field;
+		}
+
+		u_int8_t* datap = ts_buffer + ts_pos;
+		int len = TS_PACKET_SIZE - ts_pos;
+		if(headerp->payload_unit_start_indicator)
+		{	
+			buffer_append(&g_now_pmt, datap, len);
+			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt.len);
+		}
+		else
+		{	
+			buffer_append(&g_now_pmt, datap, len);
+			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt.len);
+		}
+
+		ts_parse_pmt(g_now_pmt.ptr, g_now_pmt.len);
+		g_now_pmt.len = 0;
+
+		return 1;
+		
+	}
+
+	return 0;
+}
+
 
 int ts_parse(u_int8_t* ts_buffer)
 {
@@ -518,7 +629,7 @@ int ts_parse(u_int8_t* ts_buffer)
 }
 
 
-int audio_pes_es(PES_T* pesp)
+int audio_pes2es(PES_T* pesp)
 {
 	int ret = 0;
 
@@ -614,7 +725,7 @@ int avc_parse_nalu(VIDEO_ES_T* esp, DEQUE_T* dequep)
 }
 
 
-int video_pes_es(PES_T* pesp)
+int video_pes2es(PES_T* pesp)
 {
 	int ret = 0;
 
@@ -712,7 +823,7 @@ int video_pes_es(PES_T* pesp)
 }
 
 
-int pes_queue_es()
+int pes_queue_to_es_queue()
 {
 	DEQUE_NODE* nodep = NULL;
 	nodep = g_audio_pes_deque.headp;
@@ -720,7 +831,7 @@ int pes_queue_es()
 	{
 		PES_T* pesp = (PES_T*)(nodep->elementp);
 		fprintf(stdout, "%s: audio dts=%lu, pts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts);
-		audio_pes_es(pesp);
+		audio_pes2es(pesp);
 		if(nodep->nextp == g_audio_pes_deque.headp)
 		{
 			break;
@@ -733,7 +844,7 @@ int pes_queue_es()
 	{
 		PES_T* pesp = (PES_T*)(nodep->elementp);
 		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu\n", __FUNCTION__, pesp->dts, pesp->pts, pesp->pts - pesp->dts);
-		video_pes_es(pesp);
+		video_pes2es(pesp);
 		if(nodep->nextp == g_video_pes_deque.headp)
 		{
 			break;
@@ -745,7 +856,7 @@ int pes_queue_es()
 }
 
 
-int es_queue_merge(int fd)
+int es_queue_merge_to_flv(int fd)
 {
 	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)deque_remove_head(&g_audio_es_deque);	
 	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);
@@ -855,7 +966,33 @@ int ts2flv(char* ts_file, char* flv_file)
     }
 
     u_int8_t ts_buffer[TS_PACKET_SIZE];
-    ssize_t read_size = 0;
+    ssize_t read_size = 0;    
+	while(1)
+	{
+		read_size = read(ts_fd, (void*)ts_buffer, TS_PACKET_SIZE);
+		if(read_size < TS_PACKET_SIZE)
+		{
+			break;
+		}
+
+		ret = ts_find_pat_pmt(ts_buffer);		
+		if(ret != 0)
+		{
+			break;
+		}			
+	}
+	if(ret < 0)
+	{
+		RELEASE();
+        return -1;
+	}
+	else if(ret == 0)
+	{
+		RELEASE();
+        return -1;
+	}
+
+	lseek(ts_fd, 0, SEEK_SET);
     while(1)
     {
     	read_size = read(ts_fd, (void*)ts_buffer, TS_PACKET_SIZE);
@@ -886,10 +1023,10 @@ int ts2flv(char* ts_file, char* flv_file)
 		deque_append(&g_video_pes_deque, newp);
 	}
 
-	pes_queue_es();
+	pes_queue_to_es_queue();
 		
 	flv_write_header(flv_fd, 1, 1);
-	es_queue_merge(flv_fd);
+	es_queue_merge_to_flv(flv_fd);
 	
     RELEASE();
     
