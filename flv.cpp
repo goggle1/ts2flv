@@ -3,7 +3,7 @@
 
 #include "flv.h"
 
-int flv_write_header(int fd)
+int flv_write_header(int fd, int has_audio, int has_video)
 {
 	int ret = 0;
 	
@@ -14,9 +14,9 @@ int flv_write_header(int fd)
 	header.version		= 0x01;
 
 	header.typeflags_reserved5	= 0;
-    header.typeflags_audio		= 1;
+    header.typeflags_audio		= has_audio?1:0;
     header.typeflags_reserved1	= 0;
-    header.typeflags_video		= 1;
+    header.typeflags_video		= has_video?1:0;
 
 	int header_len = sizeof(FLV_HEADER);
 	u_int32_t length = header_len;
@@ -82,10 +82,10 @@ int flv_write_aac_header(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* con
 	}
 
 	AUDIO_TAG audio_tag = {0};
-	audio_tag.sound_format	= 10; // todo:
-	audio_tag.sound_rate	= 3;
-	audio_tag.sound_size	= 1;
-	audio_tag.sound_type	= 1;
+	audio_tag.sound_format	= AUDIO_SOUNDFORMAT_AAC; 
+	audio_tag.sound_rate	= AUDIO_SOUNDRATE_44KHZ;
+	audio_tag.sound_size	= AUDIO_SOUNDSIZE_16;
+	audio_tag.sound_type	= AUDIO_SOUNDTYPE_STEREO;
 
 	len = sizeof(AUDIO_TAG);
 	ret = write(fd, &audio_tag, len);
@@ -161,10 +161,10 @@ int flv_write_aac_data(int fd, u_int32_t timestamp, u_int8_t* datap, int data_le
 	}
 
 	AUDIO_TAG audio_tag = {0};
-	audio_tag.sound_format	= 10; // todo:
-	audio_tag.sound_rate	= 3;
-	audio_tag.sound_size	= 1;
-	audio_tag.sound_type	= 1;
+	audio_tag.sound_format	= AUDIO_SOUNDFORMAT_AAC; 
+	audio_tag.sound_rate	= AUDIO_SOUNDRATE_44KHZ;
+	audio_tag.sound_size	= AUDIO_SOUNDSIZE_16;
+	audio_tag.sound_type	= AUDIO_SOUNDTYPE_STEREO;
 
 	len = sizeof(AUDIO_TAG);
 	ret = write(fd, &audio_tag, len);
@@ -248,8 +248,8 @@ int flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRec
 	}
 
 	VIDEO_TAG video_tag = {0};
-	video_tag.codec_id 		= 7;
-	video_tag.frame_format 	= 1;
+	video_tag.codec_id 		= VIDEO_CODECID_AVC;
+	video_tag.frame_format 	= VIDEO_FRAMETYPE_KEY_FRAME;
 
 	len = sizeof(VIDEO_TAG);
 	ret = write(fd, &video_tag, len);
@@ -295,7 +295,7 @@ int flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRec
 }
 
 
-int flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len)
+int flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len, u_int8_t key_frame)
 {
 	int ret = 0;
 	
@@ -330,8 +330,8 @@ int flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp
 	}
 
 	VIDEO_TAG video_tag = {0};
-	video_tag.codec_id 		= 7;
-	video_tag.frame_format 	= 1;
+	video_tag.codec_id 		= VIDEO_CODECID_AVC;
+	video_tag.frame_format 	= key_frame?VIDEO_FRAMETYPE_KEY_FRAME : VIDEO_FRAMETYPE_INTER_FRAME;
 
 	len = sizeof(VIDEO_TAG);
 	ret = write(fd, &video_tag, len);

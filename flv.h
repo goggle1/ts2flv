@@ -15,6 +15,49 @@
 #define AVC_NALU         	1 // if codecid == 7
 #define AVC_END_SEQ      	2 // if codecid == 7 end of sequence (lower level NALU sequence ender si not required or  supoported)
 
+// SoundFormat
+#define AUDIO_SOUNDFORMAT_LINEAR_PCM_P  0 // platform endian
+#define AUDIO_SOUNDFORMAT_ADPCM         1
+#define AUDIO_SOUNDFORMAT_MP3           2
+#define AUDIO_SOUNDFORMAT_LINEAR_PCM_L  3 // little endian
+#define AUDIO_SOUNDFORMAT_16KHZ_MONO    4 // nellymoser 16KHZ mono
+#define AUDIO_SOUNDFORMAT_8KHZ_MONO     5 // nellymoser 8KHZ mono
+#define AUDIO_SOUNDFORMAT_NELLYMOSER    6
+#define AUDIO_SOUNDFORMAT_G711_ALAW_PCM 7
+#define AUDIO_SOUNDFORMAT_G711_MULAW_PCM 8
+#define AUDIO_SOUNDFORMAT_RESERVED      9
+#define AUDIO_SOUNDFORMAT_AAC           10
+#define AUDIO_SOUNDFORMAT_SPEEX         11
+#define AUDIO_SOUNDFORMAT_MP3_8KHZ      14
+#define AUDIO_SOUNDFORMAT_DEVICE_SPECIFIC_SOUND 15
+
+// soundRate
+#define AUDIO_SOUNDRATE_5500HZ  0 // 5.5KHZ
+#define AUDIO_SOUNDRATE_11KHZ   1 // 11KHZ
+#define AUDIO_SOUNDRATE_22KHZ   2 // 22KHZ
+#define AUDIO_SOUNDRATE_44KHZ   3 // 44KHZ
+
+#define AUDIO_SOUNDSIZE_8   	0 // 8-bit samples
+#define AUDIO_SOUNDSIZE_16  	1 // 16-bit samples
+
+#define AUDIO_SOUNDTYPE_MONO    0 // Mono sound
+#define AUDIO_SOUNDTYPE_STEREO  1 // STEREO sound
+
+#define VIDEO_FRAMETYPE_KEY_FRAME   1 // for avc, a seekable frame
+#define VIDEO_FRAMETYPE_INTER_FRAME 2 // for avc, a non-seekable frame
+#define VIDEO_FRAMETYPE_DISPOSABLE_INTER_FARME 3 // H263 only 
+#define VIDEO_FRAMETYPE_GENERATED_KEY_FRAME    4 // reserved for server use only
+#define VIDEO_FRAMETYPE_VIDEO_INFO_COMMAND_FRAME   5 //
+
+
+#define VIDEO_CODECID_SORNESON_H263 2
+#define VIDEO_CODECID_SCREEN_VIDEO  3
+#define VIDEO_CODECID_ON2_VP6       4
+#define VIDEO_CODECID_ON2_VP6_ALPHA 5
+#define VIDEO_CODECID_SCREEN_VIDEO_VERSION2 6
+#define VIDEO_CODECID_AVC           7
+
+
 #pragma pack(1)
 
 typedef struct flv_header
@@ -225,11 +268,11 @@ typedef struct AVCDecoderConfigurationRecord
 
 #pragma pack()
 
-int		flv_write_header(int fd);
+int		flv_write_header(int fd, int has_audio, int has_video);
 int 	flv_write_aac_header(int fd, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp);
 int 	flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRecord* configp, int len);
 int 	flv_write_audio(int fd, u_int32_t timestamp, u_int8_t* datap, int data_len);
-int 	flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len);
+int 	flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len, u_int8_t key_frame);
 
 
 #endif

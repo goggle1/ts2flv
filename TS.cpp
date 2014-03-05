@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "H264.h"
 #include "TS.h"
 #include "flv.h"
 #include "deque.h"
@@ -21,12 +22,19 @@
 
 u_int32_t 	g_pid_pmt 	  		= 0;
 u_int32_t 	g_pid_network 		= 0;
+
 u_int32_t 	g_pid_audio   		= 0;
 u_int32_t 	g_pid_video 		= 0;
+
+u_int32_t 	g_audio_stream_type	= 0;
+u_int32_t 	g_video_stream_type	= 0;
+
 DEQUE_T		g_audio_pes_deque 	= {0};
 DEQUE_T		g_video_pes_deque 	= {0};
+
 DEQUE_T		g_audio_es_deque 	= {0};
 DEQUE_T		g_video_es_deque 	= {0};
+
 BUFFER_T	g_now_audio_pes 	= {0};
 BUFFER_T	g_now_video_pes 	= {0};
 
@@ -141,6 +149,29 @@ AUDIO_ES_T* audio_es_copy(AUDIO_ES_T* onep)
 	newp->len = onep->len;
 	return newp;
 }
+
+VIDEO_ES_T* video_es_copy(PES_T* onep)
+{
+	VIDEO_ES_T* newp = (VIDEO_ES_T*)malloc(sizeof(VIDEO_ES_T));
+	if(newp == NULL)
+	{
+		return NULL;
+	}
+	newp->pts = onep->pts;
+	newp->dts = onep->dts;
+	newp->ptr = (u_int8_t*)malloc(onep->len);
+	if(newp->ptr == NULL)
+	{
+		free(newp);		
+		return NULL;
+	}	
+	
+	memcpy(newp->ptr, onep->ptr, onep->len);
+	newp->len = onep->len;
+	newp->key_frame = 0;
+	return newp;
+}
+
 
 
 PES_T* pes_copy(PES_T* onep)
@@ -284,7 +315,7 @@ int ts_parse(u_int8_t* ts_buffer)
 		ts_pos += sizeof(PMT_PACKET);
 		ts_pos += program_info_length;
 
-		int components_length = section_length - 9 - program_info_length - 4;
+		int components_length = section_length - 9 - program_info_length - 4; // 9: PMT_PACKET left, 4: crc32 size
 		int components_pos = 0;
 		while(components_pos < components_length)
 		{		
@@ -296,10 +327,12 @@ int ts_parse(u_int8_t* ts_buffer)
 				__FUNCTION__, stream_type, stream_type, elementary_PID, elementary_PID, ES_info_length, ES_info_length);
 			if(stream_type == STREAM_AUDIO_AAC)
 			{
+				g_audio_stream_type = STREAM_AUDIO_AAC;
 				g_pid_audio = elementary_PID;
 			}
 			else if(stream_type == STREAM_VIDEO_H264)
 			{
+				g_video_stream_type = STREAM_VIDEO_H264;
 				g_pid_video = elementary_PID;
 			}
 				
@@ -513,7 +546,7 @@ int video_pes_es(PES_T* pesp)
 {
 	int ret = 0;
 
-	VIDEO_ES_T* esp = pes_copy(pesp);
+	VIDEO_ES_T* esp = video_es_copy(pesp);
 
 	DEQUE_T nalu_deque = {0};
 	avc_parse_nalu(esp, &nalu_deque);
@@ -564,6 +597,31 @@ int video_pes_es(PES_T* pesp)
 			memcpy(setp->sequenceParameterSetNALUnit, pps, pps_len);
 			g_video_config_pos += sizeof(PARAMETER_SET);
 			g_video_config_pos += pps_len;
+		}
+		else if(nalu_type == NALU_TYPE_IDR)
+		{
+			esp->key_frame = 1;
+			fprintf(stdout, "%s: nalu_type is IDR[0x%02X]\n", __FUNCTION__, nalu_type);
+		}
+		else if(nalu_type == NALU_TYPE_SLICE)
+		{
+			u_int8_t* datap = &(nalup->ptr[5]);
+			u_int32_t first_mb_in_slice = 0;
+			u_int32_t slice_type = 0;
+			int bits_start_pos 	= 0;
+			int bits_end_pos 	= 0;
+			bits_read_ue(datap, bits_start_pos, &first_mb_in_slice, &bits_end_pos);
+			bits_start_pos 		= bits_end_pos;
+			bits_end_pos 		= 0;
+			bits_read_ue(datap, bits_start_pos, &slice_type, &bits_end_pos);
+			fprintf(stdout, "%s: first_mb_in_slice=0x%02X, slice_type=0x%02X\n", __FUNCTION__, first_mb_in_slice, slice_type);
+			if(slice_type == SLICE_TYPE_I ||
+				slice_type == SLICE_TYPE_I2 ||
+				slice_type == SLICE_TYPE_SI ||
+				slice_type == SLICE_TYPE_SI2)
+			{
+				esp->key_frame = 1;
+			}
 		}
 		
 		
@@ -654,10 +712,10 @@ int es_queue_merge(int fd)
 		{
 			u_int64_t ts_diff = video_esp->pts - video_esp->dts;
 			fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_esp->dts, video_esp->pts, ts_diff);	
-			flv_write_video(fd, (video_esp->dts-g_start_timestamp)/TS_FLV_TIME_RATE, ts_diff/TS_FLV_TIME_RATE, video_esp->ptr, video_esp->len);
+			flv_write_video(fd, (video_esp->dts-g_start_timestamp)/TS_FLV_TIME_RATE, ts_diff/TS_FLV_TIME_RATE, video_esp->ptr, video_esp->len, video_esp->key_frame);
 			video_es_release(video_esp);
 			video_esp = NULL;
-			video_esp = (PES_T*)deque_remove_head(&g_video_es_deque);
+			video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);
 		}
 	}
 
@@ -674,10 +732,10 @@ int es_queue_merge(int fd)
 	{
 		u_int64_t ts_diff = video_esp->pts - video_esp->dts;
 		fprintf(stdout, "%s: video dts=%lu, pts=%lu, pts-dts=%lu \n", __FUNCTION__, video_esp->dts, video_esp->pts, ts_diff);	
-		flv_write_video(fd, (video_esp->dts-g_start_timestamp)/TS_FLV_TIME_RATE, ts_diff/TS_FLV_TIME_RATE, video_esp->ptr, video_esp->len);
+		flv_write_video(fd, (video_esp->dts-g_start_timestamp)/TS_FLV_TIME_RATE, ts_diff/TS_FLV_TIME_RATE, video_esp->ptr, video_esp->len, video_esp->key_frame);
 		video_es_release(video_esp);
 		video_esp = NULL;
-		video_esp = (PES_T*)deque_remove_head(&g_video_es_deque);
+		video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);
 	}
 
 	return 0;
@@ -758,7 +816,7 @@ int ts2flv(char* ts_file, char* flv_file)
 
 	pes_queue_es();
 		
-	flv_write_header(flv_fd);
+	flv_write_header(flv_fd, 1, 1);
 	es_queue_merge(flv_fd);
 	
     RELEASE();

@@ -435,7 +435,14 @@ typedef struct audio_es_t
 	u_int64_t	len;
 } AUDIO_ES_T;
 
-typedef PES_T VIDEO_ES_T;
+typedef struct video_es_t
+{
+	u_int64_t	pts;
+	u_int64_t	dts;
+	u_int8_t*	ptr;
+	u_int64_t	len;
+	u_int8_t	key_frame;
+} VIDEO_ES_T;
 
 typedef struct nalu_t
 {
