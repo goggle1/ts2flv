@@ -12,6 +12,7 @@
 #include "flv.h"
 #include "deque.h"
 #include "buffer.h"
+#include "continue_data.h"
 
 #define TS_TIMESCALE  			90000
 #define FLV_TIMESCALE 			1000
@@ -35,10 +36,10 @@ DEQUE_T		g_video_pes_deque 	= {0};
 DEQUE_T		g_audio_es_deque 	= {0};
 DEQUE_T		g_video_es_deque 	= {0};
 
-BUFFER_T	g_now_pat 			= {0};
-BUFFER_T	g_now_pmt 			= {0};
-BUFFER_T	g_now_audio_pes 	= {0};
-BUFFER_T	g_now_video_pes 	= {0};
+BUFFER_T	g_now_pat_buffer 	= {0};
+BUFFER_T	g_now_pmt_buffer 	= {0};
+BUFFER_T	g_now_audio_buffer 	= {0};
+BUFFER_T	g_now_video_buffer 	= {0};
 
 AUDIO_SPECIFIC_CONFIG 			g_audio_config = {0};
 u_int8_t						g_video_config_buffer[1024] = {0};
@@ -353,17 +354,17 @@ int ts_find_pat_pmt(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;
 		if(headerp->payload_unit_start_indicator)
 		{	
-			buffer_append(&g_now_pat, datap, len);
-			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat.len);
+			buffer_append(&g_now_pat_buffer, datap, len);
+			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat_buffer.len);
 		}
 		else
 		{	
-			buffer_append(&g_now_pat, datap, len);
-			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat.len);
+			buffer_append(&g_now_pat_buffer, datap, len);
+			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat_buffer.len);
 		}
 
-		ts_parse_pat(g_now_pat.ptr, g_now_pat.len);
-		g_now_pat.len = 0;	
+		ts_parse_pat(g_now_pat_buffer.ptr, g_now_pat_buffer.len);
+		g_now_pat_buffer.len = 0;	
 		
 	}
 	//else if(g_pid_pmt != 0x00 && pid == g_pid_pmt)
@@ -392,17 +393,17 @@ int ts_find_pat_pmt(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;
 		if(headerp->payload_unit_start_indicator)
 		{	
-			buffer_append(&g_now_pmt, datap, len);
-			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt.len);
+			buffer_append(&g_now_pmt_buffer, datap, len);
+			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt_buffer.len);
 		}
 		else
 		{	
-			buffer_append(&g_now_pmt, datap, len);
-			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt.len);
+			buffer_append(&g_now_pmt_buffer, datap, len);
+			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt_buffer.len);
 		}
 
-		ts_parse_pmt(g_now_pmt.ptr, g_now_pmt.len);
-		g_now_pmt.len = 0;
+		ts_parse_pmt(g_now_pmt_buffer.ptr, g_now_pmt_buffer.len);
+		g_now_pmt_buffer.len = 0;
 
 		return 1;
 		
@@ -465,17 +466,17 @@ int ts_parse(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;
 		if(headerp->payload_unit_start_indicator)
 		{	
-			buffer_append(&g_now_pat, datap, len);
-			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat.len);
+			buffer_append(&g_now_pat_buffer, datap, len);
+			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat_buffer.len);
 		}
 		else
 		{	
-			buffer_append(&g_now_pat, datap, len);
-			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat.len);
+			buffer_append(&g_now_pat_buffer, datap, len);
+			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat_buffer.len);
 		}
 
-		ts_parse_pat(g_now_pat.ptr, g_now_pat.len);
-		g_now_pat.len = 0;	
+		ts_parse_pat(g_now_pat_buffer.ptr, g_now_pat_buffer.len);
+		g_now_pat_buffer.len = 0;	
 		
 	}
 	//else if(g_pid_pmt != 0x00 && pid == g_pid_pmt)
@@ -504,17 +505,17 @@ int ts_parse(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;
 		if(headerp->payload_unit_start_indicator)
 		{	
-			buffer_append(&g_now_pmt, datap, len);
-			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt.len);
+			buffer_append(&g_now_pmt_buffer, datap, len);
+			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt_buffer.len);
 		}
 		else
 		{	
-			buffer_append(&g_now_pmt, datap, len);
-			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt.len);
+			buffer_append(&g_now_pmt_buffer, datap, len);
+			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt_buffer.len);
 		}
 
-		ts_parse_pmt(g_now_pmt.ptr, g_now_pmt.len);
-		g_now_pmt.len = 0;
+		ts_parse_pmt(g_now_pmt_buffer.ptr, g_now_pmt_buffer.len);
+		g_now_pmt_buffer.len = 0;
 		
 	}
 	//else if(g_pid_audio != 0x00 && pid == g_pid_audio)
@@ -535,23 +536,23 @@ int ts_parse(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;		
 		if(headerp->payload_unit_start_indicator)
 		{			
-			if(g_now_audio_pes.len != 0)
+			if(g_now_audio_buffer.len != 0)
 			{
 				PES_T pes = {0};
-				ts_parse_pes(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+				ts_parse_pes(g_now_audio_buffer.ptr, g_now_audio_buffer.len, &pes);
 				PES_T* newp = pes_copy(&pes);
 				deque_append(&g_audio_pes_deque, newp);
 			}
-			g_now_audio_pes.len = 0;
-			buffer_append(&g_now_audio_pes, datap, len);
-			fprintf(stdout, "%s: audio frame begin, len=%d\n", __FUNCTION__, g_now_audio_pes.len);
+			g_now_audio_buffer.len = 0;
+			buffer_append(&g_now_audio_buffer, datap, len);
+			fprintf(stdout, "%s: audio frame begin, len=%d\n", __FUNCTION__, g_now_audio_buffer.len);
 		}
 		else
 		{	
-			if(g_now_audio_pes.len > 0)
+			if(g_now_audio_buffer.len > 0)
 			{
-				buffer_append(&g_now_audio_pes, datap, len);
-				fprintf(stdout, "%s: audio frame ....., len=%d\n", __FUNCTION__, g_now_audio_pes.len);
+				buffer_append(&g_now_audio_buffer, datap, len);
+				fprintf(stdout, "%s: audio frame ....., len=%d\n", __FUNCTION__, g_now_audio_buffer.len);
 			}
 		}
 	}
@@ -572,23 +573,23 @@ int ts_parse(u_int8_t* ts_buffer)
 		int len = TS_PACKET_SIZE - ts_pos;		
 		if(headerp->payload_unit_start_indicator)
 		{
-			if(g_now_video_pes.len != 0)
+			if(g_now_video_buffer.len != 0)
 			{
 				PES_T pes = {0};
-				ts_parse_pes(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+				ts_parse_pes(g_now_video_buffer.ptr, g_now_video_buffer.len, &pes);
 				PES_T* newp = pes_copy(&pes);
 				deque_append(&g_video_pes_deque, newp);
 			}
-			g_now_video_pes.len = 0;
-			buffer_append(&g_now_video_pes, datap, len);
-			fprintf(stdout, "%s: video frame begin, len=%d\n", __FUNCTION__, g_now_video_pes.len);
+			g_now_video_buffer.len = 0;
+			buffer_append(&g_now_video_buffer, datap, len);
+			fprintf(stdout, "%s: video frame begin, len=%d\n", __FUNCTION__, g_now_video_buffer.len);
 		}
 		else
 		{	
-			if(g_now_video_pes.len > 0)
+			if(g_now_video_buffer.len > 0)
 			{
-				buffer_append(&g_now_video_pes, datap, len);
-				fprintf(stdout, "%s: video frame ....., len=%d\n", __FUNCTION__, g_now_video_pes.len);
+				buffer_append(&g_now_video_buffer, datap, len);
+				fprintf(stdout, "%s: video frame ....., len=%d\n", __FUNCTION__, g_now_video_buffer.len);
 			}
 		}
 	}
@@ -860,24 +861,6 @@ int es_queue_merge_to_flv(int fd)
 {
 	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)deque_remove_head(&g_audio_es_deque);	
 	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);	
-	if(audio_esp->pts <= video_esp->dts)
-	{
-		g_start_timestamp = audio_esp->pts;
-	}
-	else
-	{
-		g_start_timestamp = video_esp->dts;
-	}
-	fprintf(stdout, "%s: g_start_timestamp=%lu \n", __FUNCTION__, g_start_timestamp);
-
-#if 0
-	flv_write_aac_header(fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, &g_audio_config);
-	flv_write_avc_header(fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
-#else
-	flv_write_aac_header(fd, g_start_timestamp/TS_FLV_TIME_RATE, &g_audio_config);
-	flv_write_avc_header(fd, g_start_timestamp/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
-	g_start_timestamp = 0;
-#endif
 		
 	while(1)
 	{	
@@ -949,7 +932,7 @@ int es_queue_merge_to_flv(int fd)
     }							\
 }
 
-int ts2flv(char* ts_file, char* flv_file)
+int ts2flv(int start_index, char* flv_file, char* ts_file, char* ts_2_file)
 {
 	int ret  	= -1;
 	
@@ -1014,27 +997,50 @@ int ts2flv(char* ts_file, char* flv_file)
     	}	    	
     }
 
-    if(g_now_audio_pes.len != 0)
+    if(g_now_audio_buffer.len != 0)
 	{
 		PES_T pes = {0};
-		ts_parse_pes(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+		ts_parse_pes(g_now_audio_buffer.ptr, g_now_audio_buffer.len, &pes);
 		PES_T* newp = pes_copy(&pes);
 		deque_append(&g_audio_pes_deque, newp);
 	}
-	if(g_now_video_pes.len != 0)
+	if(g_now_video_buffer.len != 0)
 	{
 		PES_T pes = {0};
-		ts_parse_pes(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+		ts_parse_pes(g_now_video_buffer.ptr, g_now_video_buffer.len, &pes);
 		PES_T* newp = pes_copy(&pes);
 		deque_append(&g_video_pes_deque, newp);
 	}
 
 	pes_queue_to_es_queue();
 
-#if 0	
-	flv_write_header(flv_fd, 1, 1);
-#endif
+	if(start_index == 0)
+	{
+		flv_write_header(flv_fd, 1, 1);
+		
+		AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)(g_audio_es_deque.headp->elementp);	
+		VIDEO_ES_T* video_esp = (VIDEO_ES_T*)(g_video_es_deque.headp->elementp);	
+		if(audio_esp->pts <= video_esp->dts)
+		{
+			g_start_timestamp = audio_esp->pts;
+		}
+		else
+		{
+			g_start_timestamp = video_esp->dts;
+		}
+		fprintf(stdout, "%s: g_start_timestamp=%lu \n", __FUNCTION__, g_start_timestamp);
+
+		flv_write_aac_header(flv_fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, &g_audio_config);
+		flv_write_avc_header(flv_fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
+	}
+
+	continue_data_read_timestamp(&g_start_timestamp);
+	//continue_data_read_audio();
+	
 	es_queue_merge_to_flv(flv_fd);
+	
+	continue_data_write_timestamp(g_start_timestamp);
+	//continue_data_write_audio();
 	
     RELEASE();
     

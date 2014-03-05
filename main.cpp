@@ -6,26 +6,28 @@
 
 void print_usage(char* program_name)
 {
-	fprintf(stdout, "%s [example.ts] [example.flv]\n", program_name);
+	fprintf(stdout, "%s [index] [out.flv] [in.ts] {in_2.ts}\n", program_name);
 }
 
 int main(int argc, char* argv[])
 {
-	if(argc < 3)
+	if(argc < 4)
 	{
 		print_usage(argv[0]);
 		exit(1);
 	}
-	
-	char* ts_file = argv[1];
-	char* flv_file = argv[2];
+
+	int		start_index = atoi(argv[1]);
+	char* 	flv_file 	= argv[2];
+	char* 	ts_file 	= argv[3];
+	char*   ts_2_file	= argv[4];
 
 #if 0	
 	make_null_flv(flv_file);
 	return 0;
 #endif
 	
-	int ret = ts2flv(ts_file, flv_file);
+	int ret = ts2flv(start_index, flv_file, ts_file, ts_2_file);
 	
 	return ret;
 }

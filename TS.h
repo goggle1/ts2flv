@@ -450,7 +450,7 @@ typedef struct nalu_t
 	u_int64_t	len;
 } NALU_T;
 
-int ts2flv(char* ts_file, char* flv_file);
+int ts2flv(int start_index, char* flv_file, char* ts_file, char* ts_2_file);
 int make_null_flv(char* flv_file);
 
 #endif
