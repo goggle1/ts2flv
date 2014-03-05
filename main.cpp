@@ -17,10 +17,15 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 	
-	char* file_ts = argv[1];
-	char* file_flv = argv[2];
+	char* ts_file = argv[1];
+	char* flv_file = argv[2];
+
+#if 0	
+	make_null_flv(flv_file);
+	return 0;
+#endif
 	
-	int ret = ts2flv(file_ts, file_flv);
+	int ret = ts2flv(ts_file, flv_file);
 	
 	return ret;
 }

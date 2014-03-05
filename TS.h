@@ -451,6 +451,7 @@ typedef struct nalu_t
 } NALU_T;
 
 int ts2flv(char* ts_file, char* flv_file);
+int make_null_flv(char* flv_file);
 
 #endif
 

@@ -859,7 +859,7 @@ int pes_queue_to_es_queue()
 int es_queue_merge_to_flv(int fd)
 {
 	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)deque_remove_head(&g_audio_es_deque);	
-	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);
+	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);	
 	if(audio_esp->pts <= video_esp->dts)
 	{
 		g_start_timestamp = audio_esp->pts;
@@ -870,8 +870,14 @@ int es_queue_merge_to_flv(int fd)
 	}
 	fprintf(stdout, "%s: g_start_timestamp=%lu \n", __FUNCTION__, g_start_timestamp);
 
+#if 0
 	flv_write_aac_header(fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, &g_audio_config);
 	flv_write_avc_header(fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
+#else
+	flv_write_aac_header(fd, g_start_timestamp/TS_FLV_TIME_RATE, &g_audio_config);
+	flv_write_avc_header(fd, g_start_timestamp/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
+	g_start_timestamp = 0;
+#endif
 		
 	while(1)
 	{	
@@ -1024,12 +1030,31 @@ int ts2flv(char* ts_file, char* flv_file)
 	}
 
 	pes_queue_to_es_queue();
-		
+
+#if 0	
 	flv_write_header(flv_fd, 1, 1);
+#endif
 	es_queue_merge_to_flv(flv_fd);
 	
     RELEASE();
     
+	return ret;
+}
+
+int make_null_flv(char * flv_file)
+{
+	int ret = 0;
+	int flv_fd = open(flv_file, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
+	if(flv_fd == -1)
+	{
+		fprintf(stderr, "open %s error! \n", flv_file); 
+		return -1;
+	}
+
+	ret = flv_write_header(flv_fd, 1, 1);
+	
+	close(flv_fd);
+	
 	return ret;
 }
 
