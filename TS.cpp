@@ -35,6 +35,8 @@ DEQUE_T		g_video_pes_deque 	= {0};
 DEQUE_T		g_audio_es_deque 	= {0};
 DEQUE_T		g_video_es_deque 	= {0};
 
+BUFFER_T	g_now_pat 			= {0};
+BUFFER_T	g_now_pmt 			= {0};
 BUFFER_T	g_now_audio_pes 	= {0};
 BUFFER_T	g_now_video_pes 	= {0};
 
@@ -196,7 +198,7 @@ PES_T* pes_copy(PES_T* onep)
 }
 
 
-int timestamp_parse(u_int8_t* buffer, int len, u_int64_t* outp)
+int ts_parse_timestamp(u_int8_t* buffer, int len, u_int64_t* outp)
 {
 	TIMESTAMP_T* timestampp = (TIMESTAMP_T*)buffer;
 	u_int64_t	value = timestampp->timestamp_32_30 << 30 | 
@@ -209,7 +211,7 @@ int timestamp_parse(u_int8_t* buffer, int len, u_int64_t* outp)
 	return 0;
 }
 
-int pes_parse(u_int8_t* pes_buffer, int pes_len, PES_T* pesp)
+int ts_parse_pes(u_int8_t* pes_buffer, int pes_len, PES_T* pesp)
 {
 	PES_HEADER* headerp = (PES_HEADER*)pes_buffer;
 	fprintf(stdout, "%s: stream_id=%u[0x%02X] \n", __FUNCTION__, headerp->stream_id, headerp->stream_id);
@@ -221,15 +223,82 @@ int pes_parse(u_int8_t* pes_buffer, int pes_len, PES_T* pesp)
 	if(headerp->PTS_DTS_flags & 0x02)
 	{
 		// pts
-		timestamp_parse(pes_buffer+sizeof(PES_HEADER), sizeof(TIMESTAMP_T), &(pesp->pts));
+		ts_parse_timestamp(pes_buffer+sizeof(PES_HEADER), sizeof(TIMESTAMP_T), &(pesp->pts));
 	}
 	if(headerp->PTS_DTS_flags & 0x01)
 	{
 		// dts
-		timestamp_parse(pes_buffer+sizeof(PES_HEADER)+sizeof(TIMESTAMP_T), sizeof(TIMESTAMP_T), &(pesp->dts));
+		ts_parse_timestamp(pes_buffer+sizeof(PES_HEADER)+sizeof(TIMESTAMP_T), sizeof(TIMESTAMP_T), &(pesp->dts));
 	}
 	return 0;
 }
+
+
+int ts_parse_pmt(u_int8_t* buffer, int len)
+{
+	int ts_pos = 0;
+	PMT_PACKET* packetp = (PMT_PACKET*)(buffer);
+	int section_length = packetp->section_length_11_8 << 8 | packetp->section_length_7_0;
+	int program_info_length = packetp->program_info_length_11_8 << 8 | packetp->program_info_length_7_0;
+	ts_pos += sizeof(PMT_PACKET);
+	ts_pos += program_info_length;
+
+	int components_length = section_length - 9 - program_info_length - 4; // 9: PMT_PACKET left, 4: crc32 size
+	int components_pos = 0;
+	while(components_pos < components_length)
+	{		
+		STREAM_T* streamp = (STREAM_T*)(buffer + ts_pos + components_pos);
+		int stream_type = streamp->stream_type;
+		int elementary_PID = streamp->elementary_PID_12_8<<8 | streamp->elementary_PID_7_0;
+		int ES_info_length = streamp->ES_info_length_11_8<<8 | streamp->ES_info_length_7_0;			
+		fprintf(stdout, "%s: STREAM_T stream_type=%u[0x%04X], elementary_PID=%u[0x%04X], ES_info_length=%u[0x%04X]\n", 
+			__FUNCTION__, stream_type, stream_type, elementary_PID, elementary_PID, ES_info_length, ES_info_length);
+		if(stream_type == STREAM_AUDIO_AAC)
+		{
+			g_audio_stream_type = STREAM_AUDIO_AAC;
+			g_pid_audio = elementary_PID;
+		}
+		else if(stream_type == STREAM_VIDEO_H264)
+		{
+			g_video_stream_type = STREAM_VIDEO_H264;
+			g_pid_video = elementary_PID;
+		}
+			
+		components_pos += sizeof(STREAM_T);			
+		components_pos += ES_info_length;
+	}
+		
+	return 0;
+}
+
+
+int ts_parse_pat(u_int8_t* buffer, int len)
+{
+	PAT_PACKET* packetp = (PAT_PACKET*)(buffer);
+	int section_length = packetp->section_length_11_8 << 8 | packetp->section_length_7_0;
+	int programs_length = section_length - 5 - 4; // 5: PAT_PACEKT left, 4: crc32 size
+	int programs_num = programs_length / sizeof(PROGRAM_T);
+
+	int index = 0;
+	for(index = 0;index<programs_num; index++)
+	{
+		PROGRAM_T* programp = &(packetp->programs[index]);
+		int program_number = programp->program_number_15_8 << 8 | programp->program_number_7_0;
+		if (program_number == 0x00)
+		{ 
+		 	g_pid_network = programp->network_PID_12_8 << 8 | programp->network_PID_7_0;
+		 	fprintf(stdout, "%s: g_pid_network=%u[0x%04X]\n", __FUNCTION__, g_pid_network, g_pid_network);
+		}
+		else
+		{			 
+		 	g_pid_pmt = programp->network_PID_12_8 << 8 | programp->network_PID_7_0;
+		 	fprintf(stdout, "%s: g_pid_pmt=%u[0x%04X]\n", __FUNCTION__, g_pid_pmt, g_pid_pmt);
+		}
+	}
+		
+	return 0;
+}
+
 
 
 int ts_parse(u_int8_t* ts_buffer)
@@ -264,36 +333,39 @@ int ts_parse(u_int8_t* ts_buffer)
 	{
 		// PAT
 		if(headerp->adaption_field_control == 0x01)
-		{
-			ts_pos += 1;
+		{	
+			ts_pos += 0;
 		}
 		else if(headerp->adaption_field_control == 0x03)
 		{
 			int adaptation_field_length = ts_buffer[ts_pos];
-			ts_pos += adaptation_field_length;
 			ts_pos += 1;
+			ts_pos += adaptation_field_length;		
 		}
-		PAT_PACKET* packetp = (PAT_PACKET*)(ts_buffer + ts_pos);
-		int section_length = packetp->section_length_11_8 << 8 | packetp->section_length_7_0;
-		int programs_length = section_length - 5 - 4; // 5: PAT_PACEKT left, 4: crc32 size
-		int programs_num = programs_length / sizeof(PROGRAM_T);
-
-		int index = 0;
-		for(index = 0;index<programs_num; index++)
+		
+		if(headerp->payload_unit_start_indicator == 0x01)
 		{
-			PROGRAM_T* programp = &(packetp->programs[index]);
-			int program_number = programp->program_number_15_8 << 8 | programp->program_number_7_0;
-			if (program_number == 0x00)
-			{ 
-			 	g_pid_network = programp->network_PID_12_8 << 8 | programp->network_PID_7_0;
-			 	fprintf(stdout, "%s: g_pid_network=%u[0x%04X]\n", __FUNCTION__, g_pid_network, g_pid_network);
-			}
-			else
-			{			 
-			 	g_pid_pmt = programp->network_PID_12_8 << 8 | programp->network_PID_7_0;
-			 	fprintf(stdout, "%s: g_pid_pmt=%u[0x%04X]\n", __FUNCTION__, g_pid_pmt, g_pid_pmt);
-			}
+			int pointer_field = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += pointer_field;
 		}
+
+		u_int8_t* datap = ts_buffer + ts_pos;
+		int len = TS_PACKET_SIZE - ts_pos;
+		if(headerp->payload_unit_start_indicator)
+		{	
+			buffer_append(&g_now_pat, datap, len);
+			fprintf(stdout, "%s: pat begin, len=%d\n", __FUNCTION__, g_now_pat.len);
+		}
+		else
+		{	
+			buffer_append(&g_now_pat, datap, len);
+			fprintf(stdout, "%s: pat ....., len=%d\n", __FUNCTION__, g_now_pat.len);
+		}
+
+		ts_parse_pat(g_now_pat.ptr, g_now_pat.len);
+		g_now_pat.len = 0;	
+		
 	}
 	//else if(g_pid_pmt != 0x00 && pid == g_pid_pmt)
 	else if(pid == g_pid_pmt)
@@ -301,44 +373,38 @@ int ts_parse(u_int8_t* ts_buffer)
 		// PMT
 		if(headerp->adaption_field_control == 0x01)
 		{
-			ts_pos += 1;
+			ts_pos += 0;
 		}
 		else if(headerp->adaption_field_control == 0x03)
 		{
 			int adaptation_field_length = ts_buffer[ts_pos];
-			ts_pos += adaptation_field_length;
 			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
 		}
-		PMT_PACKET* packetp = (PMT_PACKET*)(ts_buffer + ts_pos);
-		int section_length = packetp->section_length_11_8 << 8 | packetp->section_length_7_0;
-		int program_info_length = packetp->program_info_length_11_8 << 8 | packetp->program_info_length_7_0;
-		ts_pos += sizeof(PMT_PACKET);
-		ts_pos += program_info_length;
 
-		int components_length = section_length - 9 - program_info_length - 4; // 9: PMT_PACKET left, 4: crc32 size
-		int components_pos = 0;
-		while(components_pos < components_length)
-		{		
-			STREAM_T* streamp = (STREAM_T*)(ts_buffer + ts_pos + components_pos);
-			int stream_type = streamp->stream_type;
-			int elementary_PID = streamp->elementary_PID_12_8<<8 | streamp->elementary_PID_7_0;
-			int ES_info_length = streamp->ES_info_length_11_8<<8 | streamp->ES_info_length_7_0;			
-			fprintf(stdout, "%s: STREAM_T stream_type=%u[0x%04X], elementary_PID=%u[0x%04X], ES_info_length=%u[0x%04X]\n", 
-				__FUNCTION__, stream_type, stream_type, elementary_PID, elementary_PID, ES_info_length, ES_info_length);
-			if(stream_type == STREAM_AUDIO_AAC)
-			{
-				g_audio_stream_type = STREAM_AUDIO_AAC;
-				g_pid_audio = elementary_PID;
-			}
-			else if(stream_type == STREAM_VIDEO_H264)
-			{
-				g_video_stream_type = STREAM_VIDEO_H264;
-				g_pid_video = elementary_PID;
-			}
-				
-			components_pos += sizeof(STREAM_T);			
-			components_pos += ES_info_length;
+		if(headerp->payload_unit_start_indicator == 0x01)
+		{
+			int pointer_field = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += pointer_field;
 		}
+
+		u_int8_t* datap = ts_buffer + ts_pos;
+		int len = TS_PACKET_SIZE - ts_pos;
+		if(headerp->payload_unit_start_indicator)
+		{	
+			buffer_append(&g_now_pmt, datap, len);
+			fprintf(stdout, "%s: pmt begin, len=%d\n", __FUNCTION__, g_now_pmt.len);
+		}
+		else
+		{	
+			buffer_append(&g_now_pmt, datap, len);
+			fprintf(stdout, "%s: pmt ....., len=%d\n", __FUNCTION__, g_now_pmt.len);
+		}
+
+		ts_parse_pmt(g_now_pmt.ptr, g_now_pmt.len);
+		g_now_pmt.len = 0;
+		
 	}
 	//else if(g_pid_audio != 0x00 && pid == g_pid_audio)
 	else if(pid == g_pid_audio)
@@ -350,8 +416,8 @@ int ts_parse(u_int8_t* ts_buffer)
 		else if(headerp->adaption_field_control == 0x03)
 		{
 			int adaptation_field_length = ts_buffer[ts_pos];
-			ts_pos += adaptation_field_length;
 			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
 		}
 		
 		u_int8_t* datap = ts_buffer + ts_pos;
@@ -361,7 +427,7 @@ int ts_parse(u_int8_t* ts_buffer)
 			if(g_now_audio_pes.len != 0)
 			{
 				PES_T pes = {0};
-				pes_parse(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+				ts_parse_pes(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
 				PES_T* newp = pes_copy(&pes);
 				deque_append(&g_audio_pes_deque, newp);
 			}
@@ -371,8 +437,11 @@ int ts_parse(u_int8_t* ts_buffer)
 		}
 		else
 		{	
-			buffer_append(&g_now_audio_pes, datap, len);
-			fprintf(stdout, "%s: audio frame ....., len=%d\n", __FUNCTION__, g_now_audio_pes.len);
+			if(g_now_audio_pes.len > 0)
+			{
+				buffer_append(&g_now_audio_pes, datap, len);
+				fprintf(stdout, "%s: audio frame ....., len=%d\n", __FUNCTION__, g_now_audio_pes.len);
+			}
 		}
 	}
 	else if(pid == g_pid_video)
@@ -384,8 +453,8 @@ int ts_parse(u_int8_t* ts_buffer)
 		else if(headerp->adaption_field_control == 0x03)
 		{
 			int adaptation_field_length = ts_buffer[ts_pos];
-			ts_pos += adaptation_field_length;
 			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
 		}
 		
 		u_int8_t* datap = ts_buffer + ts_pos;
@@ -395,7 +464,7 @@ int ts_parse(u_int8_t* ts_buffer)
 			if(g_now_video_pes.len != 0)
 			{
 				PES_T pes = {0};
-				pes_parse(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+				ts_parse_pes(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
 				PES_T* newp = pes_copy(&pes);
 				deque_append(&g_video_pes_deque, newp);
 			}
@@ -405,8 +474,11 @@ int ts_parse(u_int8_t* ts_buffer)
 		}
 		else
 		{	
-			buffer_append(&g_now_video_pes, datap, len);
-			fprintf(stdout, "%s: video frame ....., len=%d\n", __FUNCTION__, g_now_video_pes.len);
+			if(g_now_video_pes.len > 0)
+			{
+				buffer_append(&g_now_video_pes, datap, len);
+				fprintf(stdout, "%s: video frame ....., len=%d\n", __FUNCTION__, g_now_video_pes.len);
+			}
 		}
 	}
 	else
@@ -437,8 +509,8 @@ int ts_parse(u_int8_t* ts_buffer)
 		else if(headerp->adaption_field_control == 0x03)
 		{
 			int adaptation_field_length = ts_buffer[ts_pos];
-			ts_pos += adaptation_field_length;
 			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
 		}
 	}
 
@@ -802,14 +874,14 @@ int ts2flv(char* ts_file, char* flv_file)
     if(g_now_audio_pes.len != 0)
 	{
 		PES_T pes = {0};
-		pes_parse(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
+		ts_parse_pes(g_now_audio_pes.ptr, g_now_audio_pes.len, &pes);
 		PES_T* newp = pes_copy(&pes);
 		deque_append(&g_audio_pes_deque, newp);
 	}
 	if(g_now_video_pes.len != 0)
 	{
 		PES_T pes = {0};
-		pes_parse(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
+		ts_parse_pes(g_now_video_pes.ptr, g_now_video_pes.len, &pes);
 		PES_T* newp = pes_copy(&pes);
 		deque_append(&g_video_pes_deque, newp);
 	}
