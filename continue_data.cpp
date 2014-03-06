@@ -46,7 +46,7 @@ int continue_data_read(char* channel)
 {
 	//char* data_file = "continue.data";
 	char data_file[256] = {0};
-	snprintf(data_file, 256, "%s.data", channel);
+	snprintf(data_file, 256, "%s.fun", channel);
 	data_file[255] = '\0';
 	
 	int fd = open(data_file, O_RDONLY);
@@ -113,7 +113,7 @@ int continue_data_write(char* channel)
 {
 	//char* data_file = "continue.data";
 	char data_file[256] = {0};
-	snprintf(data_file, 256, "%s.data", channel);
+	snprintf(data_file, 256, "%s.fun", channel);
 	data_file[255] = '\0';
 	
 	int fd = open(data_file, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
