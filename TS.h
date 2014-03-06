@@ -450,8 +450,11 @@ typedef struct nalu_t
 	u_int64_t	len;
 } NALU_T;
 
-int ts2flv(int start_index, char* flv_file, char* ts_file, char* ts_2_file);
-int make_null_flv(char* flv_file);
+AUDIO_ES_T*	audio_es_copy(AUDIO_ES_T* onep);
+void 		audio_es_release(void* datap);
+
+int 		ts2flv(char* channel, int start_index, char* flv_file, char* ts_file, char* ts_2_file);
+int 		make_null_flv(char* flv_file);
 
 #endif
 

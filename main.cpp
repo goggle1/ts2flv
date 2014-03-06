@@ -6,7 +6,7 @@
 
 void print_usage(char* program_name)
 {
-	fprintf(stdout, "%s [index] [out.flv] [in.ts] {in_2.ts}\n", program_name);
+	fprintf(stdout, "%s [channel] [index] [out.flv] [in.ts] {in_2.ts}\n", program_name);
 }
 
 int main(int argc, char* argv[])
@@ -17,17 +17,18 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	int		start_index = atoi(argv[1]);
-	char* 	flv_file 	= argv[2];
-	char* 	ts_file 	= argv[3];
-	char*   ts_2_file	= argv[4];
+	char* 	channel		= argv[1];
+	int		start_index = atoi(argv[2]);
+	char* 	flv_file 	= argv[3];
+	char* 	ts_file 	= argv[4];
+	char*   ts_2_file	= argv[5];
 
 #if 0	
 	make_null_flv(flv_file);
 	return 0;
 #endif
 	
-	int ret = ts2flv(start_index, flv_file, ts_file, ts_2_file);
+	int ret = ts2flv(channel, start_index, flv_file, ts_file, ts_2_file);
 	
 	return ret;
 }

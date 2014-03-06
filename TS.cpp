@@ -301,6 +301,98 @@ int ts_parse_pat(u_int8_t* buffer, int len)
 }
 
 
+int ts_find_video(u_int8_t* ts_buffer, PES_T* pesp)
+{
+	static u_int32_t s_ts_index = 0;
+	
+	TS_HEADER* headerp = (TS_HEADER*)ts_buffer;
+	if(headerp->sync_byte != 0x47)
+	{
+		fprintf(stderr, "%s: sync_byte=0x%02X, !=0x47\n", __FUNCTION__, headerp->sync_byte);
+		return -1;
+	}
+	if(headerp->transport_error_indicator != 0x00)
+	{
+		fprintf(stderr, "%s: transport_error_indicator=0x%02X, !=0x00\n", __FUNCTION__, headerp->transport_error_indicator);
+		return -1;
+	}	
+
+	u_int32_t pid = headerp->PID_12_8 << 8 | headerp->PID_7_0;
+	fprintf(stdout, "%s: index=%u, pid=%u[0x%04X]\n", __FUNCTION__, s_ts_index, pid, pid);
+	s_ts_index ++;
+	
+	if(headerp->adaption_field_control == 0x00)
+	{
+		fprintf(stdout, "%s: adaption_field_control=0x%02X, ==0x00\n", __FUNCTION__, headerp->adaption_field_control);
+		return -1;
+	}
+
+	int ts_pos = sizeof(TS_HEADER);	
+		
+	if(pid == g_pid_video)
+	{
+		if(headerp->adaption_field_control == 0x01)
+		{
+			ts_pos += 0;
+		}
+		else if(headerp->adaption_field_control == 0x03)
+		{
+			int adaptation_field_length = ts_buffer[ts_pos];
+			ts_pos += 1;
+			ts_pos += adaptation_field_length;			
+		}
+		
+		u_int8_t* datap = ts_buffer + ts_pos;
+		int len = TS_PACKET_SIZE - ts_pos;		
+		if(headerp->payload_unit_start_indicator)
+		{
+			BUFFER_T	video_buffer = {0};
+			buffer_append(&video_buffer, datap, len);
+			fprintf(stdout, "%s: video frame begin, len=%d\n", __FUNCTION__, video_buffer.len);
+			ts_parse_pes(video_buffer.ptr, video_buffer.len, pesp);
+			return 1;
+		}
+		
+	}
+
+	return 0;
+}
+
+
+int ts_file_find_video(char* ts_file, PES_T* pesp)
+{
+	int ret = 0;
+	
+	int ts_fd = open(ts_file, O_RDONLY);
+    if(ts_fd == -1)
+    {
+        fprintf(stderr, "open %s error! \n", ts_file);	
+        return -1;
+    }
+
+    u_int8_t ts_buffer[TS_PACKET_SIZE];
+    ssize_t read_size = 0;    
+	while(1)
+	{
+		read_size = read(ts_fd, (void*)ts_buffer, TS_PACKET_SIZE);
+		if(read_size < TS_PACKET_SIZE)
+		{
+			break;
+		}
+
+		ret = ts_find_video(ts_buffer, pesp);		
+		if(ret != 0)
+		{
+			break;
+		}			
+	}
+	
+    close(ts_fd);
+    
+	return ret;
+}
+
+
 int ts_find_pat_pmt(u_int8_t* ts_buffer)
 {
 	static u_int32_t s_ts_index = 0;
@@ -857,7 +949,7 @@ int pes_queue_to_es_queue()
 }
 
 
-int es_queue_merge_to_flv(int fd)
+int es_queue_merge_to_flv(int fd, PES_T* ts2_first_video_pesp)
 {
 	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)deque_remove_head(&g_audio_es_deque);	
 	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&g_video_es_deque);	
@@ -893,6 +985,12 @@ int es_queue_merge_to_flv(int fd)
 
 	while(audio_esp != NULL)
 	{
+		if(ts2_first_video_pesp->dts > 0 && audio_esp->pts > ts2_first_video_pesp->dts)
+		{
+			fprintf(stdout, "%s: audio pts=%lu > ts2_first_video_pesp->dts=%lu \n", __FUNCTION__, audio_esp->pts, ts2_first_video_pesp->dts);	
+			break;
+		}
+		
 		fprintf(stdout, "%s: audio pts=%lu \n", __FUNCTION__, audio_esp->pts);							
 		flv_write_audio(fd, (audio_esp->pts-g_start_timestamp)/TS_FLV_TIME_RATE, audio_esp->ptr, audio_esp->len);
 		audio_es_release(audio_esp);
@@ -932,12 +1030,21 @@ int es_queue_merge_to_flv(int fd)
     }							\
 }
 
-int ts2flv(int start_index, char* flv_file, char* ts_file, char* ts_2_file)
+int ts2flv(char* channel, int start_index, char* flv_file, char* ts_file, char* ts_2_file)
 {
 	int ret  	= -1;
 	
 	int ts_fd 	= -1;
 	int flv_fd 	= -1;
+
+	if(start_index == 0)
+	{
+		// do nothing.
+	}
+	else
+	{
+		continue_data_read(channel);
+	}
 	
 	ts_fd = open(ts_file, O_RDONLY);
     if(ts_fd == -1)
@@ -1034,13 +1141,12 @@ int ts2flv(int start_index, char* flv_file, char* ts_file, char* ts_2_file)
 		flv_write_avc_header(flv_fd, (g_start_timestamp-g_start_timestamp)/TS_FLV_TIME_RATE, g_video_configp, g_video_config_pos);
 	}
 
-	continue_data_read_timestamp(&g_start_timestamp);
-	//continue_data_read_audio();
+	PES_T ts2_first_video = {0};
+	ts_file_find_video(ts_2_file, &ts2_first_video);
 	
-	es_queue_merge_to_flv(flv_fd);
+	es_queue_merge_to_flv(flv_fd, &ts2_first_video);
 	
-	continue_data_write_timestamp(g_start_timestamp);
-	//continue_data_write_audio();
+	continue_data_write(channel);
 	
     RELEASE();
     
