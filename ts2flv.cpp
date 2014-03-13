@@ -504,7 +504,7 @@ int TS2FLV::ts_parse(u_int8_t* ts_buffer)
 	
 	if(headerp->adaption_field_control == 0x00)
 	{
-		fprintf(stdout, "%s: adaption_field_control=0x%02X, ==0x00\n", __FUNCTION__, headerp->adaption_field_control);
+		fprintf(stderr, "%s: adaption_field_control=0x%02X, ==0x00\n", __FUNCTION__, headerp->adaption_field_control);
 		return -1;
 	}
 
@@ -868,7 +868,7 @@ int TS2FLV::buff2buff(u_int8_t * ts_memoryp, int ts_len, u_int8_t * flv_memoryp,
 		}
 		fprintf(stdout, "%s: m_start_timestamp=%lu \n", __FUNCTION__, m_start_timestamp);
 		
-		//m_start_timestamp = 0;
+		m_start_timestamp = 0;
 		
 		flv_bufferp = flv_memoryp + flv_position;	
 		flv_memo_size = flv_memo_aac_header(flv_bufferp, flv_remain_size, (audio_esp->pts-m_start_timestamp)/TS_FLV_TIME_RATE, &m_audio_config);
