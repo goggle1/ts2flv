@@ -450,11 +450,18 @@ typedef struct nalu_t
 	u_int64_t	len;
 } NALU_T;
 
+PES_T* 		pes_copy(PES_T* onep);
 AUDIO_ES_T*	audio_es_copy(AUDIO_ES_T* onep);
-void 		audio_es_release(void* datap);
+VIDEO_ES_T* video_es_copy(PES_T* onep);
 
-int 		ts2flv(char* channel, int start_index, char* flv_file, char* ts_file, char* ts_2_file);
-int 		make_null_flv(char* flv_file);
+void 		pes_release(void* datap);
+void 		audio_es_release(void* datap);
+void 		video_es_release(void* datap);
+void 		nalu_release(void* datap);
+
+int 		avc_parse_nalu(VIDEO_ES_T* esp, DEQUE_T* dequep);
+int 		ts_parse_pes(u_int8_t* pes_buffer, int pes_len, PES_T* pesp);
+
 
 #endif
 

@@ -274,6 +274,12 @@ int 	flv_write_avc_header(int fd, u_int32_t timestamp, AVCDecoderConfigurationRe
 int 	flv_write_audio(int fd, u_int32_t timestamp, u_int8_t* datap, int data_len);
 int 	flv_write_video(int fd, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len, u_int8_t key_frame);
 
+int		flv_memo_header(u_int8_t* bufferp, int size, int has_audio, int has_video);
+int 	flv_memo_aac_header(u_int8_t* bufferp, int size, u_int32_t timestamp, AUDIO_SPECIFIC_CONFIG* configp);
+int 	flv_memo_avc_header(u_int8_t* bufferp, int size, u_int32_t timestamp, AVCDecoderConfigurationRecord* configp, int len);
+int 	flv_memo_audio(u_int8_t* bufferp, int size, u_int32_t timestamp, u_int8_t* datap, int data_len);
+int 	flv_memo_video(u_int8_t* bufferp, int size, u_int32_t timestamp, u_int32_t composition_timestamp, u_int8_t* datap, int data_len, u_int8_t key_frame);
+
 
 #endif
 
