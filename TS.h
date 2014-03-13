@@ -453,13 +453,14 @@ typedef struct nalu_t
 PES_T* 		pes_copy(PES_T* onep);
 AUDIO_ES_T*	audio_es_copy(AUDIO_ES_T* onep);
 VIDEO_ES_T* video_es_copy(PES_T* onep);
+NALU_T* 	nalu_copy(NALU_T* nalup);
+
 
 void 		pes_release(void* datap);
 void 		audio_es_release(void* datap);
 void 		video_es_release(void* datap);
 void 		nalu_release(void* datap);
 
-int 		avc_parse_nalu(VIDEO_ES_T* esp, DEQUE_T* dequep);
 int 		ts_parse_pes(u_int8_t* pes_buffer, int pes_len, PES_T* pesp);
 
 

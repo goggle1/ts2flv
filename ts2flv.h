@@ -2,7 +2,7 @@
 #ifndef __TS2FLV_H__
 #define __TS2FLV_H__
 
-#include "deque.h"
+#include "dequeH.h"
 #include "buffer.h"
 #include "TS.h"
 #include "flv.h"
@@ -38,11 +38,11 @@ protected:
 	u_int32_t 	m_audio_stream_type;
 	u_int32_t 	m_video_stream_type;
 
-	DEQUE_T		m_audio_pes_deque;
-	DEQUE_T		m_video_pes_deque;
+	DEQUEH_T	m_audio_pes_deque;
+	DEQUEH_T	m_video_pes_deque;
 
-	DEQUE_T		m_audio_es_deque;
-	DEQUE_T		m_video_es_deque;
+	DEQUEH_T	m_audio_es_deque;
+	DEQUEH_T	m_video_es_deque;
 
 	BUFFER_T	m_pat_buffer;
 	BUFFER_T	m_pmt_buffer;

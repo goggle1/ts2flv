@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "H264.h"
-#include "deque.h"
+#include "dequeH.h"
 
 #include "TS.h"
 
@@ -185,43 +185,6 @@ int ts_parse_pes(u_int8_t* pes_buffer, int pes_len, PES_T* pesp)
 		// dts
 		ts_parse_timestamp(pes_buffer+sizeof(PES_HEADER)+sizeof(TIMESTAMP_T), sizeof(TIMESTAMP_T), &(pesp->dts));
 	}
-	return 0;
-}
-
-
-int avc_parse_nalu(VIDEO_ES_T* esp, DEQUE_T* dequep)
-{
-	int data_pos = 0;
-	u_int8_t* datap = esp->ptr;
-	int data_len = esp->len;
-
-	NALU_T nalu = {0};
-	
-	while(data_pos < data_len)
-	{
-		if(datap[data_pos+0] == 0x00 &&
-			datap[data_pos+1] == 0x00 &&
-			datap[data_pos+2] == 0x00 &&
-			datap[data_pos+3] == 0x01)
-		{
-			if(nalu.ptr != NULL)
-			{
-				nalu.len = &(datap[data_pos+0])-nalu.ptr;
-				NALU_T* nalup = nalu_copy(&nalu);
-				deque_append(dequep, nalup);
-			}
-			nalu.ptr = (u_int8_t*)&(datap[data_pos+0]);
-		}
-		data_pos ++;
-	}
-
-	if(nalu.ptr != NULL)
-	{
-		nalu.len = &(datap[data_pos+0])-nalu.ptr;
-		NALU_T* nalup = nalu_copy(&nalu);
-		deque_append(dequep, nalup);
-	}
-	
 	return 0;
 }
 

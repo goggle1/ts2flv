@@ -25,10 +25,46 @@ static u_int32_t sample_rate_table[] =
 
 #define memory_release()	\
 {								\
-	deque_release(&m_video_es_deque, video_es_release); \
-	deque_release(&m_audio_es_deque, audio_es_release); \
-	deque_release(&m_video_pes_deque, pes_release);	\
-	deque_release(&m_audio_pes_deque, pes_release);	\
+	dequeh_release(&m_video_es_deque, video_es_release); \
+	dequeh_release(&m_audio_es_deque, audio_es_release); \
+	dequeh_release(&m_video_pes_deque, pes_release);	\
+	dequeh_release(&m_audio_pes_deque, pes_release);	\
+}
+
+int avc_parse_nalu(VIDEO_ES_T* esp, DEQUEH_T* dequep)
+{
+	int data_pos = 0;
+	u_int8_t* datap = esp->ptr;
+	int data_len = esp->len;
+
+	NALU_T nalu = {0};
+	
+	while(data_pos < data_len)
+	{
+		if(datap[data_pos+0] == 0x00 &&
+			datap[data_pos+1] == 0x00 &&
+			datap[data_pos+2] == 0x00 &&
+			datap[data_pos+3] == 0x01)
+		{
+			if(nalu.ptr != NULL)
+			{
+				nalu.len = &(datap[data_pos+0])-nalu.ptr;
+				NALU_T* nalup = nalu_copy(&nalu);
+				dequeh_append(dequep, nalup);
+			}
+			nalu.ptr = (u_int8_t*)&(datap[data_pos+0]);
+		}
+		data_pos ++;
+	}
+
+	if(nalu.ptr != NULL)
+	{
+		nalu.len = &(datap[data_pos+0])-nalu.ptr;
+		NALU_T* nalup = nalu_copy(&nalu);
+		dequeh_append(dequep, nalup);
+	}
+	
+	return 0;
 }
 
 
@@ -132,7 +168,7 @@ int TS2FLV::audio_pes2es(PES_T* pesp)
 		es.len = raw_data_len;
 		es.pts = pesp->pts + AAC_FRAME_SAMPLE_NUM*TS_TIMESCALE/sample_rate*frame_index;
 		AUDIO_ES_T* esp = audio_es_copy(&es);
-		deque_append(&m_audio_es_deque, esp);
+		dequeh_append(&m_audio_es_deque, esp);
 		
 		data_pos += frame_length;
 		frame_index ++;
@@ -148,10 +184,10 @@ int TS2FLV::video_pes2es(PES_T* pesp)
 
 	VIDEO_ES_T* esp = video_es_copy(pesp);
 
-	DEQUE_T nalu_deque = {0};
+	DEQUEH_T nalu_deque = {0};
 	avc_parse_nalu(esp, &nalu_deque);
-	DEQUE_NODE* headp = nalu_deque.headp;
-	DEQUE_NODE* nodep = headp;
+	DEQUEH_NODE* headp = nalu_deque.headp;
+	DEQUEH_NODE* nodep = headp;
 	while(nodep != NULL)
 	{
 		NALU_T* nalup = (NALU_T*)nodep->elementp;
@@ -232,9 +268,9 @@ int TS2FLV::video_pes2es(PES_T* pesp)
 		nodep = nodep->nextp;
 	}
 		
-	deque_append(&m_video_es_deque, esp);
+	dequeh_append(&m_video_es_deque, esp);
 
-	deque_release(&nalu_deque, nalu_release);
+	dequeh_release(&nalu_deque, nalu_release);
 	
 	return ret;
 }
@@ -242,7 +278,7 @@ int TS2FLV::video_pes2es(PES_T* pesp)
 
 int TS2FLV::pes_to_es()
 {
-	DEQUE_NODE* nodep = NULL;
+	DEQUEH_NODE* nodep = NULL;
 	nodep = m_audio_pes_deque.headp;
 	while(nodep != NULL)
 	{
@@ -337,7 +373,6 @@ int TS2FLV::ts_find_pat_pmt(u_int8_t* ts_buffer)
 		m_pat_buffer.len = 0;	
 		
 	}
-	//else if(m_pid_pmt != 0x00 && pid == m_pid_pmt)
 	else if(pid == m_pid_pmt)
 	{
 		// PMT
@@ -573,7 +608,7 @@ int TS2FLV::ts_parse(u_int8_t* ts_buffer)
 				PES_T pes = {0};
 				ts_parse_pes(m_audio_buffer.ptr, m_audio_buffer.len, &pes);
 				PES_T* newp = pes_copy(&pes);
-				deque_append(&m_audio_pes_deque, newp);
+				dequeh_append(&m_audio_pes_deque, newp);
 			}
 			m_audio_buffer.len = 0;
 			buffer_append(&m_audio_buffer, datap, len);
@@ -610,7 +645,7 @@ int TS2FLV::ts_parse(u_int8_t* ts_buffer)
 				PES_T pes = {0};
 				ts_parse_pes(m_video_buffer.ptr, m_video_buffer.len, &pes);
 				PES_T* newp = pes_copy(&pes);
-				deque_append(&m_video_pes_deque, newp);
+				dequeh_append(&m_video_pes_deque, newp);
 			}
 			m_video_buffer.len = 0;
 			buffer_append(&m_video_buffer, datap, len);
@@ -669,8 +704,8 @@ int TS2FLV::flv_memo_es(u_int8_t* flv_memoryp, int flv_size)
     int			flv_remain_size = flv_size;
     int 		flv_memo_size	= 0;
     
-	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)deque_remove_head(&m_audio_es_deque);	
-	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)deque_remove_head(&m_video_es_deque);	
+	AUDIO_ES_T* audio_esp = (AUDIO_ES_T*)dequeh_remove_head(&m_audio_es_deque);	
+	VIDEO_ES_T* video_esp = (VIDEO_ES_T*)dequeh_remove_head(&m_video_es_deque);	
 		
 	while(1)
 	{	
@@ -691,7 +726,7 @@ int TS2FLV::flv_memo_es(u_int8_t* flv_memoryp, int flv_size)
 			flv_remain_size -= flv_memo_size;
 			audio_es_release(audio_esp);
 			audio_esp = NULL;
-			audio_esp = (AUDIO_ES_T*)deque_remove_head(&m_audio_es_deque);			
+			audio_esp = (AUDIO_ES_T*)dequeh_remove_head(&m_audio_es_deque);			
 		}
 		else
 		{
@@ -703,7 +738,7 @@ int TS2FLV::flv_memo_es(u_int8_t* flv_memoryp, int flv_size)
 			flv_remain_size -= flv_memo_size;
 			video_es_release(video_esp);
 			video_esp = NULL;
-			video_esp = (VIDEO_ES_T*)deque_remove_head(&m_video_es_deque);
+			video_esp = (VIDEO_ES_T*)dequeh_remove_head(&m_video_es_deque);
 		}
 	}
 
@@ -716,7 +751,7 @@ int TS2FLV::flv_memo_es(u_int8_t* flv_memoryp, int flv_size)
 		flv_remain_size -= flv_memo_size;
 		audio_es_release(audio_esp);
 		audio_esp = NULL;
-		audio_esp = (AUDIO_ES_T*)deque_remove_head(&m_audio_es_deque);
+		audio_esp = (AUDIO_ES_T*)dequeh_remove_head(&m_audio_es_deque);
 	}
 
 	while(video_esp != NULL)
@@ -729,7 +764,7 @@ int TS2FLV::flv_memo_es(u_int8_t* flv_memoryp, int flv_size)
 		flv_remain_size -= flv_memo_size;
 		video_es_release(video_esp);
 		video_esp = NULL;
-		video_esp = (VIDEO_ES_T*)deque_remove_head(&m_video_es_deque);
+		video_esp = (VIDEO_ES_T*)dequeh_remove_head(&m_video_es_deque);
 	}
 
 	return flv_position;
@@ -792,14 +827,14 @@ int TS2FLV::buff2buff(u_int8_t * ts_memoryp, int ts_len, u_int8_t * flv_memoryp,
 		PES_T pes = {0};
 		ts_parse_pes(m_audio_buffer.ptr, m_audio_buffer.len, &pes);
 		PES_T* newp = pes_copy(&pes);
-		deque_append(&m_audio_pes_deque, newp);
+		dequeh_append(&m_audio_pes_deque, newp);
 	}
 	if(m_video_buffer.len != 0)
 	{
 		PES_T pes = {0};
 		ts_parse_pes(m_video_buffer.ptr, m_video_buffer.len, &pes);
 		PES_T* newp = pes_copy(&pes);
-		deque_append(&m_video_pes_deque, newp);
+		dequeh_append(&m_video_pes_deque, newp);
 	}
 
 	pes_to_es();
